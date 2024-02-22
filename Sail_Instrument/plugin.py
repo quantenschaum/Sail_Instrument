@@ -90,8 +90,8 @@ CONFIG = [
     "type": "BOOLEAN",
   },
     {
-          'name': 'allowKeyOverwrite',
-          'description': 'necessary to be able to set our time directly from canboat',
+          'name': "allowKeyOverwrite",
+          'description': 'write calculated data to AvNav model in gps.*',
           'default': False,
           'type': 'BOOLEAN'
     },  
@@ -258,7 +258,9 @@ class Plugin(object):
         return
       a = self.api.getSingleValue(path, includeInfo=True)
       if a is None or "Sail_Instrument" in a.source:
-        self.api.addData(path, data[key])
+          ako=self.api.getConfigValue("allowKeyOverwrite")
+          if ako == "True":
+              self.api.addData(path, data[key])
 
     d = CourseData()
     while not self.api.shouldStopMainThread():
