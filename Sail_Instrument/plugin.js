@@ -154,7 +154,8 @@ var Sail_InstrumentWidget = {
     finalizeFunction: function() {},
     renderCanvas: function(canvas, data) {
       //console.log(data);
-      var ctx = canvas.getContext('2d');
+      let ctx = canvas.getContext('2d');
+      ctx.save();
       // Set scale factor for all values
       var crect = canvas.getBoundingClientRect();
       var w = crect.width;
@@ -213,6 +214,7 @@ var Sail_InstrumentWidget = {
       ctx.fillText("TWS", 1.4*radius,-1.3*radius);
       ctx.fillText(knots(data.TWSF).toFixed(1), 1.4*radius,-1.1*radius);
       ctx.restore();
+      ctx.restore();
     },
 };
 
@@ -266,6 +268,8 @@ let Sail_Instrument_Overlay = {
     initFunction: function() {},
     finalizeFunction: function() {},
     renderCanvas: function(canvas, data, center) {
+		let ctx = canvas.getContext('2d');
+		ctx.save();
         //console.log(data);
         if (data.Widgetposition == 'Mapcenter')
             ctx.translate(canvas.getAttribute("width") / 2, canvas.getAttribute("height") / 2);
@@ -279,6 +283,7 @@ let Sail_Instrument_Overlay = {
         ctx.globalAlpha *= data.Opacity;
 
         drawWindWidget(ctx, data.Displaysize, degrees(this.getRotation()), data);
+        ctx.restore();
     }
 
 }
@@ -377,7 +382,7 @@ let LayLines_Overlay = {
     finalizeFunction: function() {},
     renderCanvas: function(canvas, props, center) {
         if (typeof(props.POS) != 'undefined') {
-            ctx = canvas.getContext('2d')
+            let ctx = canvas.getContext('2d');
             ctx.save();
             ctx.globalAlpha *= props.Opacity;
 
