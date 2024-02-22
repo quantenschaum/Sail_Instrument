@@ -388,7 +388,7 @@ let LayLines_Overlay = {
 
             intersections = calc_intersections(self, props);
             //console.log(intersections);
-            if (typeof(intersections) != 'undefined') {
+            if (typeof(intersections) != 'undefined' && intersections!=NULL) {
                 DrawMapLaylines(this, ctx, intersections, props);
             }
             ctx.restore();
