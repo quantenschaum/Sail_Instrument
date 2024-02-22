@@ -152,7 +152,7 @@ class Plugin(object):
     assert (
       MIN_AVNAV_VERSION <= self.api.getAvNavVersion()
     ), "incompatible AvNav version"
-     self.api.registerRestart(self.stop)
+    self.api.registerRestart(self.stop)
     self.api.registerEditableParameters(CONFIG, self.changeParam)
     self.api.registerRequestHandler(self.handleApiRequest)
 
