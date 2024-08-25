@@ -35,7 +35,6 @@ from datetime import datetime
 import numpy
 import scipy.interpolate
 import scipy.optimize
-from time import monotonic
 from avnav_nmea import NMEAParser
 
 try:
@@ -454,14 +453,14 @@ class Plugin(object):
     def dead_reckoning(self, data, d):
         # keep track of last known fix
         if all(data.get(k) is not None for k in ("LAT","LON")):
-            self.DR = tuple([monotonic()]+[data.get(k,0) for k in ("LAT","LON","COG","SOG")])
+            self.DR = tuple([time.monotonic()]+[data.get(k,0) for k in ("LAT","LON","COG","SOG")])
             return
         # perform DR integration
         if not hasattr(self, "DR"):
             pos = self.config[DR_POS]
             if not pos: return
             lat,lon = list(map(float, pos.split(",")))
-            self.DR = monotonic(),lat,lon,0,0
+            self.DR = time.monotonic(),lat,lon,0,0
             # print("INIT DR",self.DR)
         if data["VAR"] is None and d.has("LAT", "LON"):
             data["VAR"] = self.mag_variation(d["LAT"], d["LON"])
@@ -473,7 +472,7 @@ class Plugin(object):
         data["DFT"] *= MPS
         cd = CourseData(**data) # compute COG/SOG
         if cd.misses("COG","SOG"): return
-        t1,cog1,sog1 = monotonic(),cd.COG,cd.SOG
+        t1,cog1,sog1 = time.monotonic(),cd.COG,cd.SOG
         lat1,lon1 = project((lat0,lon0), (cog1+cog0)/2, (sog1+sog0)/2*KNOTS*(t1-t0)/3600)
         data["LAT"],data["LON"],data["COG"],data["SOG"] = lat1,lon1,cog1,sog1
         self.DR = t1,lat1,lon1,cog1,sog1
