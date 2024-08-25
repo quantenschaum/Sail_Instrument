@@ -29,11 +29,13 @@ import re
 import shutil
 import sys
 import time
-from math import sin, cos, radians, degrees, sqrt, atan2, isfinite, copysign
+from math import sin, cos, radians, degrees, sqrt, atan2, isfinite, copysign, asin
+from datetime import datetime
 
 import numpy
 import scipy.interpolate
 import scipy.optimize
+from distributed.metrics import monotonic
 from avnav_nmea import NMEAParser
 
 try:
@@ -81,6 +83,9 @@ DECODE = "nmea_decode"
 DEPTH_OF_TRANSDUCER = "depth_transducer"
 DRAUGHT = "draught"
 VMIN = "vmin"
+DR_ALLOW = "dr_allow"
+DR_POS = "dr_pos"
+DR_TIDE = "dr_tide"
 
 INPUT_FIELDS = {
     "LAT": "gps.lat",
@@ -257,6 +262,24 @@ CONFIG = [
         "type": "FLOAT",
         "default": 0.2,
     },
+    {
+        "name": DR_ALLOW,
+        "description": "enable dead reckoning mode, compute LAT/LON/COG/SOG and inject RMC if no position data is available (GPS fails)",
+        "type": "BOOLEAN",
+        "default": "False",
+    },
+    {
+        "name": DR_POS,
+        "description": "initial position for dead reckoning as 'LAT,LON' in decimal degrees, used if not fix is available at plugin start",
+        "type": "STRING",
+        "default": "",
+    },
+    {
+        "name": DR_TIDE,
+        "description": "tide vector for dead reckoning as 'set,drift' (degrees,knots)",
+        "type": "STRING",
+        "default": "0,0",
+    },
 ]
 
 
@@ -428,6 +451,53 @@ class Plugin(object):
             values.pop(0)
         data[key + "MIN"], data[key + "MAX"] = min(values), max(values)
 
+    def dead_reckoning(self, data, d):
+        # keep track of last known fix
+        if all(data.get(k) is not None for k in ("LAT","LON")):
+            self.DR = tuple([monotonic()]+[data.get(k,0) for k in ("LAT","LON","COG","SOG")])
+            return
+        # perform DR integration
+        if not hasattr(self, "DR"):
+            pos = self.config[DR_POS]
+            if not pos: return
+            lat,lon = list(map(float, pos.split(",")))
+            self.DR = monotonic(),lat,lon,0,0
+            # print("INIT DR",self.DR)
+        if data["VAR"] is None and d.has("LAT", "LON"):
+            data["VAR"] = self.mag_variation(d["LAT"], d["LON"])
+            self.msg += ", variation from WMM"
+        else:
+            data["VAR"] = 0 # bootstrap VAR to get HDT from HDM
+        t0,lat0,lon0,cog0,sog0 = self.DR
+        data["SET"],data["DFT"] = list(map(float, self.config[DR_TIDE].split(",")))
+        data["DFT"] *= MPS
+        cd = CourseData(**data) # compute COG/SOG
+        if cd.misses("COG","SOG"): return
+        t1,cog1,sog1 = monotonic(),cd.COG,cd.SOG
+        lat1,lon1 = project((lat0,lon0), (cog1+cog0)/2, (sog1+sog0)/2*KNOTS*(t1-t0)/3600)
+        data["LAT"],data["LON"],data["COG"],data["SOG"] = lat1,lon1,cog1,sog1
+        self.DR = t1,lat1,lon1,cog1,sog1
+        # print("DR",self.DR)
+
+        # inject RMC with DR position
+        t = datetime.utcnow()
+        hhmmss = f"{t.hour:02d}{t.minute:02d}{t.second:02d}"
+        hhmmssss = hhmmss + f"{t.microsecond * 1e-6:.2f}"[1:]
+        ddmmyy = f"{t.day:02d}{t.month:02d}{t.year % 100:02d}"
+        latdeg, latmin = divmod(abs(lat1) * 60, 60)
+        latsgn = "S" if lat1 < 0 else "N"
+        londeg, lonmin = divmod(abs(lon1) * 60, 60)
+        lonsgn = "W" if lon1 < 0 else "E"
+
+        self.api.addNMEA(
+            f"$DRRMC,{hhmmssss},A,{latdeg:02.0f}{latmin:06.3f},{latsgn},{londeg:03.0f}{lonmin:06.3f},{lonsgn},{sog1*KNOTS:05.1f},{cog1:05.1f},{ddmmyy},,,E", # E = estimated
+            source=SOURCE,
+            addCheckSum=True,
+            omitDecode=not self.config[DECODE],
+            sourcePriority=self.config[PRIORITY],
+        )
+        self.msg += ", DEAD RECKONING"
+
     def run(self):
         self.read_config()
         self.api.setStatus("STARTED", "running")
@@ -445,6 +515,9 @@ class Plugin(object):
                 if data["VAR"] is None and all(data.get(k) is not None for k in ("LAT", "LON")):
                     data["VAR"] = self.mag_variation(data["LAT"], data["LON"])
                     self.msg += ", variation from WMM"
+
+                if self.config[DR_ALLOW]:
+                    self.dead_reckoning(data, d)
 
                 if self.config[FALLBACK]:
                     if data["HDT"] is None and any(data.get(k) is None for k in ("HDM", "VAR")):
@@ -507,7 +580,6 @@ class Plugin(object):
                 sending = set()
                 nmea_write = self.config[WRITE]
                 nmea_filter = self.config[NMEA_FILTER].split(",")
-                nmea_priority = self.config[PRIORITY]
                 ID = self.config[TALKER_ID]
                 if nmea_write:
                     for f, s in NMEA_SENTENCES.items():
@@ -520,7 +592,7 @@ class Plugin(object):
                                     source=SOURCE,
                                     addCheckSum=True,
                                     omitDecode=not self.config[DECODE],
-                                    sourcePriority=nmea_priority,
+                                    sourcePriority=self.config[PRIORITY],
                                 )
                                 sending.add(s[:6])
 
@@ -893,3 +965,16 @@ def add_polar(a, b):
     s = a[0] + b[0], a[1] + b[1]
     return toPol(s)
 
+def project(point, bearing, distance):
+  "great circle projection: point -(bearing,distance)-> point"
+  lat1, lon1 = (radians(a) for a in point)
+  bearing = radians(bearing)
+  distance *= 1852  # to meters
+  distance /= 6371008.8  # angular distance
+
+  lat2 = asin(sin(lat1) * cos(distance) + cos(lat1) * sin(distance) * cos(bearing))
+  y = sin(bearing) * sin(distance) * cos(lat1)
+  x = cos(distance) - sin(lat1) * sin(lat2)
+  lon2 = lon1 + atan2(y, x)
+
+  return [to180(degrees(a)) for a in (lat2, lon2)]
