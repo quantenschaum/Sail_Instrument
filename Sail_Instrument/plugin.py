@@ -35,7 +35,7 @@ from datetime import datetime
 import numpy
 import scipy.interpolate
 import scipy.optimize
-from distributed.metrics import monotonic
+from time import monotonic
 from avnav_nmea import NMEAParser
 
 try:
