@@ -33,7 +33,7 @@ var LaylineWidget = {
         }
         return {...props,
           caption: (props.type=='time' ? 'TTW' : 'DTW') + suffix,
-          unit: props.type=='time' ? '' : props.formatterParameters.length ? props.formatterParameters[0] : props.unit,
+          unit: props.type=='time' ? '' : ((props.formatterParameters instanceof Array) && props.formatterParameters.length > 0) ? props.formatterParameters[0] : props.unit,
         };
     },
     renderHtml: function(data) {
