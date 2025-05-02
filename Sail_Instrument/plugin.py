@@ -60,7 +60,9 @@ MPS = 1 / KNOTS
 POLAR_FILE = "polar.json"
 HEEL_FILE = "heel.json"
 PATH_PREFIX = "gps.sail_instrument."
-SMOOTHING_FACTOR = "smoothing_factor"
+SMOOTHING_AW = "smoothing_aw"
+SMOOTHING_TW = "smoothing_tw"
+SMOOTHING_SD = "smoothing_sd"
 MM_SAMPLES = "minmax_samples"
 GROUND_WIND = "ground_wind"
 FALLBACK = "allow_fallback"
@@ -143,9 +145,21 @@ CONFIG = [
         "default": 0.5,
     },
     {
-        "name": SMOOTHING_FACTOR,
-        "description": "exponential smoothing factor for TWD/AWD",
+        "name": SMOOTHING_AW,
+        "description": "exponential smoothing factor for apparent wind",
         "default": "0.1",
+        "type": "FLOAT",
+    },
+    {
+        "name": SMOOTHING_TW,
+        "description": "exponential smoothing factor for true wind",
+        "default": "0.01",
+        "type": "FLOAT",
+    },
+    {
+        "name": SMOOTHING_SD,
+        "description": "exponential smoothing factor for set/drift",
+        "default": "0.02",
         "type": "FLOAT",
     },
     {
@@ -422,7 +436,7 @@ class Plugin(object):
         p, r = data[phi], data[rad]
         xy = toCart((p, r))
         if k in filtered:
-            a = self.config[SMOOTHING_FACTOR]
+            a = self.config[SMOOTHING_TW if 'TW' in phi else SMOOTHING_SD if 'SET' in phi else SMOOTHING_AW]
             assert 0 < a <= 1
             v = filtered[k]
             filtered[k] = [v[i] + a * (xy[i] - v[i]) for i in (0, 1)]
