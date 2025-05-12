@@ -940,12 +940,14 @@ class CourseData:
 
 
 def to360(a):
-    "limit a to [0,360)"
-    return a % 360
+    'limit angle a to [0,360)'
+    # Python's modulo always returns same sign as divisor
+    # it is done twice to fix round off errors (like for a=-1e-14)
+    return (a % 360) % 360
 
 
 def to180(a):
-    "limit a to [-180,+180)"
+    'limit angle a to [-180,+180)'
     return to360(a + 180) - 180
 
 
