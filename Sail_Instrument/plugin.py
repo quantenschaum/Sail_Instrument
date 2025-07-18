@@ -29,16 +29,16 @@ import re
 import shutil
 import sys
 import time
-from math import sin, cos, radians, degrees, sqrt, atan2, isfinite, copysign
+from math import sin, cos, radians, degrees, sqrt, atan2, isfinite, copysign, exp
 
 import numpy
 import scipy.interpolate
 import scipy.optimize
-from avnav_nmea import NMEAParser
 
 try:
     from avnrouter import AVNRouter, WpData
     from avnav_worker import AVNWorker
+    from avnav_nmea import NMEAParser
 except:
     pass
 
@@ -63,6 +63,9 @@ PATH_PREFIX = "gps.sail_instrument."
 SMOOTHING_AW = "smoothing_aw"
 SMOOTHING_TW = "smoothing_tw"
 SMOOTHING_SD = "smoothing_sd"
+SMOOTHING_COG = "smoothing_cog"
+SMOOTHING_CTW = "smoothing_ctw"
+SMOOTHING_HDT = "smoothing_hdt"
 MM_SAMPLES = "minmax_samples"
 GROUND_WIND = "ground_wind"
 FALLBACK = "allow_fallback"
@@ -146,21 +149,39 @@ CONFIG = [
     },
     {
         "name": SMOOTHING_AW,
-        "description": "exponential smoothing factor for apparent wind",
-        "default": "0.1",
-        "type": "FLOAT",
+        "description": "exponential smoothing time (s) for apparent wind",
+        "default": "15",
+        "type": "NUMBER",
     },
     {
         "name": SMOOTHING_TW,
-        "description": "exponential smoothing factor for true wind",
-        "default": "0.01",
-        "type": "FLOAT",
+        "description": "exponential smoothing time (s) for true wind",
+        "default": "300",
+        "type": "NUMBER",
     },
     {
         "name": SMOOTHING_SD,
-        "description": "exponential smoothing factor for set/drift",
-        "default": "0.02",
-        "type": "FLOAT",
+        "description": "exponential smoothing time (s) for set/drift",
+        "default": "900",
+        "type": "NUMBER",
+    },
+    {
+        "name": SMOOTHING_COG,
+        "description": "exponential smoothing time (s) for COG/SOG",
+        "default": "10",
+        "type": "NUMBER",
+    },
+    {
+        "name": SMOOTHING_CTW,
+        "description": "exponential smoothing time (s) for CTW/STW",
+        "default": "10",
+        "type": "NUMBER",
+    },
+    {
+        "name": SMOOTHING_HDT,
+        "description": "exponential smoothing time (s) for HDT/STW",
+        "default": "5",
+        "type": "NUMBER",
     },
     {
         "name": MM_SAMPLES,
@@ -426,6 +447,18 @@ class Plugin(object):
             ws *= MPS
             return wd, ws
 
+    def smoothing_factor(self, phi):
+        dt = self.config[PERIOD]
+        tau = self.config[SMOOTHING_TW if phi.startswith('TW') else
+                          SMOOTHING_AW if phi.startswith('AW') else
+                          SMOOTHING_SD if phi=='SET' else
+                          SMOOTHING_COG if phi=='COG' else
+                          SMOOTHING_CTW if phi=='CTW' else
+                          SMOOTHING_HDT if phi=='HDT' else
+                          None]
+        if tau<=0: return 1
+        return 1-exp(-dt/tau)
+
     def smooth(self, data, phi, rad):
         if not hasattr(self, "filtered"):
             self.filtered = {}
@@ -434,14 +467,14 @@ class Plugin(object):
             return
         k = phi + rad
         p, r = data[phi], data[rad]
-        xy = toCart((p, r))
+        w = toCart((p, r))
         if k in filtered:
-            a = self.config[SMOOTHING_TW if 'TW' in phi else SMOOTHING_SD if 'SET' in phi else SMOOTHING_AW]
+            a = self.smoothing_factor(phi)
             assert 0 < a <= 1
             v = filtered[k]
-            filtered[k] = [v[i] + a * (xy[i] - v[i]) for i in (0, 1)]
+            filtered[k] = [(1-a)*v[i] + a*w[i] for i in (0, 1)]
         else:
-            filtered[k] = xy
+            filtered[k] = w
         p, r = toPol(filtered[k])
         data[phi + "F"] = to180(p) if phi[-1] == "A" else p
         data[rad + "F"] = r
@@ -521,6 +554,9 @@ class Plugin(object):
                 self.smooth(data, "TWD", "TWS")
                 data["TWAF"] = to180(data["TWDF"] - data["HDT"]) if d.has("TWDF", "HDT") else None
                 self.smooth(data, "SET", "DFT")
+                self.smooth(data, "COG", "SOG")
+                self.smooth(data, "HDT", "STW")
+                self.smooth(data, "CTW", "STW")
                 self.min_max(data, "TWD", lambda v: to180(v - data["TWDF"]))
                 for k in ("AWS", "TWS", "DFT"):
                     if k not in data:
