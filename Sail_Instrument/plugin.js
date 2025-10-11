@@ -69,7 +69,7 @@ var LaylineWidget = {
             var val = avnav.api.formatter.formatDistance(dist,data.formatterParameters);
           } else {
             var time = data.tack=='current' ? time_c : data.tack=='opposite' ? time_o : time_t;
-            var val = avnav.api.formatter.formatTime(toDateTime(time));
+            var val = avnav.api.formatter.formatTime(toDateTime(time),false);
           }
           if(direct && data.tack=='opposite') val='---';
         } catch(error) {
