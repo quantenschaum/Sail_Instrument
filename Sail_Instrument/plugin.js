@@ -1351,9 +1351,10 @@ function degrees(a) {
     return a * 180 / Math.PI;
 }
 
-
-function absSmallest(nums){
-  return nums.reduce((a,v)=>Math.abs(a)<Math.abs(v)?a:v);
+function integrateMotion(x0,speed,force,mass,friction,dt){
+  const accel = force/mass - friction*speed;
+  speed += accel*dt;
+  return [x0 + speed*dt, speed];
 }
 
 var LinearCompassWidget = {
@@ -1365,23 +1366,17 @@ var LinearCompassWidget = {
 //      console.log(data,animated,new Date());
 
       // set target value when called outside animation loop
-      if(!animated) canvas._c1=data.value;
+      if(!animated) canvas._ct=data.value;
 
-      const max_speed=data.max_speed;
-      const damping=data.damping;
       const range=data.range;
       const dir=data.flip?1:-1;
 
-      const c1=to360(canvas._c1), t1=Date.now();
-      const c0=to360(canvas._c0??c1), t0=canvas._t0??t1;
-      // shortest path through wrap around
-      const d=absSmallest([c1-c0, c1-c0+360, c1-c0-360]);
-      // dc = delta per animation frame, with upper limit and damping
-      const dc=Math.sign(d)*Math.min(max_speed,Math.abs(d)*damping);
-      const dt=t1-t0;
-      const course=c0+dc*dt/33; // scale with timestep for smooth appearance
-//      console.log(c1,c0,d,dc,dt,course);
-
+      const t1=Date.now();
+      const ct=to360(canvas._ct)
+      const c0=to360(canvas._c0??ct), s0=canvas._s0??0, t0=canvas._t0??t1;
+      const dt=(t1-t0)/30;
+      const d=to180(ct-c0); // shortest path / wrap around
+      const [c1, s1] = integrateMotion(c0,s0,d,data.mass,data.friction,dt);
 
       const ctx = canvas.getContext('2d');
       const bcr = canvas.getBoundingClientRect();
@@ -1406,17 +1401,16 @@ var LinearCompassWidget = {
       ctx.lineTo(w, cy);
       ctx.stroke();
 
-      const c=Math.floor(course/step_deg)*step_deg; // floor center tick
-      const a=Math.floor((course-range/2)/step_deg)*step_deg; //first tick
+      const a=Math.floor((c1-range/2)/step_deg)*step_deg; //first tick
 
-      const o=c-course; // translation offset
+      const o=a-(c1-range/2); // translation offset
       ctx.translate(cx+dir*o*px_per_deg,cy); // translate course to center
 
       ctx.lineWidth = 2;
       ctx.strokeStyle = color;
       ctx.font = font;
       ctx.fillStyle = color;
-      for(let i=0;i<=range;i+=step_deg){
+      for(let i=-30;i<=range+30;i+=step_deg){
         const v=to360(i+a); // tick value
         const x=dir*(i*px_per_deg-cx); // tick position
         let y;
@@ -1447,7 +1441,7 @@ var LinearCompassWidget = {
       if(data.showValue) {
         ctx.font = font;
         ctx.fillStyle = color;
-        l=to360(course).toFixed(0);
+        l=to360(c1).toFixed(0);
         tw=ctx.measureText(l).width;
         ctx.fillText(l, -tw/2, 1.9*H);
       }
@@ -1469,18 +1463,20 @@ var LinearCompassWidget = {
 
       ctx.restore();
 
-      if(w>0 && (animated || canvas._c0==null))
-      requestAnimationFrame(()=>LinearCompassWidget.renderCanvas(canvas, data, true));
-      canvas._c0=course;
-      canvas._t0=Date.now();
+      if(w>0 && (animated || canvas._c0==null)){
+        requestAnimationFrame(()=>LinearCompassWidget.renderCanvas(canvas, data, true));
+      }
+      canvas._c0=c1;
+      canvas._s0=s1;
+      canvas._t0=t1;
     },
 };
 
 avnav.api.registerWidget(LinearCompassWidget, {
   value: true,
+  mass: { type: 'FLOAT', default: 100 },
+  friction: { type: 'FLOAT', default: 0.2 },
   range: { type: 'NUMBER', default: 180 },
-  damping: { type: 'FLOAT', default: 0.1 },
-  max_speed: { type: 'FLOAT', default: 1 },
   showValue: { type: 'BOOLEAN', default: false },
   flip: { type: 'BOOLEAN', default: false },
   altTicks: { type: 'BOOLEAN', default: false },
@@ -1496,21 +1492,14 @@ var RoundCompassWidget = {
       canvas.style.height='100%';
 
       // set target value when called outside animation loop
-      if(!animated) canvas._c1=data.value;
+      if(!animated) canvas._ct=data.value;
 
-      const max_speed=data.max_speed;
-      const damping=data.damping;
-
-      const c1=to360(canvas._c1), t1=Date.now();
-      const c0=to360(canvas._c0??c1), t0=canvas._t0??t1;
-      // shortest path through wrap around
-      const d=absSmallest([c1-c0, c1-c0+360, c1-c0-360]);
-      // dc = delta per animation frame, with upper limit and damping
-      const dc=Math.sign(d)*Math.min(max_speed,Math.abs(d)*damping);
-      const dt=t1-t0;
-      const course=c0+dc*dt/33; // scale with timestep for smooth appearance
-//      console.log(c1,c0,d,dc,dt,course);
-
+      const t1=Date.now();
+      const ct=to360(canvas._ct)
+      const c0=to360(canvas._c0??ct), s0=canvas._s0??0, t0=canvas._t0??t1;
+      const dt=(t1-t0)/30;
+      const d=to180(ct-c0); // shortest path / wrap around
+      const [c1, s1] = integrateMotion(c0,s0,d,data.mass,data.friction,dt);
 
       const ctx = canvas.getContext('2d');
       const bcr = canvas.getBoundingClientRect();
@@ -1531,7 +1520,7 @@ var RoundCompassWidget = {
       ctx.save();
 
       // tick marks
-      ctx.rotate(-radians(course));
+      ctx.rotate(-radians(c1));
       for(let v=0;v<360;v+=step_deg){
         ctx.beginPath();
         let s; // tick length
@@ -1574,24 +1563,26 @@ var RoundCompassWidget = {
       ctx.fill();
       // value at center
       if(data.showValue) {
-        let l=course.toFixed(0).padStart(3,'0');
+        let l=c1.toFixed(0).padStart(3,'0');
         ctx.font = 2*F+'px Arial';
         let tw=ctx.measureText(l).width;
         ctx.fillStyle = color1;
         ctx.fillText(l, -tw/2, (half?-0.3*R:0)+0.7*F);
       }
 
-      if(w>0 && (animated || canvas._c0==null))
-      requestAnimationFrame(()=>RoundCompassWidget.renderCanvas(canvas, data, true));
-      canvas._c0=course;
-      canvas._t0=Date.now();
+      if(w>0 && (animated || canvas._c0==null)){
+        requestAnimationFrame(()=>RoundCompassWidget.renderCanvas(canvas, data, true));
+      }
+      canvas._c0=c1;
+      canvas._s0=s1;
+      canvas._t0=t1;
     },
 };
 
 avnav.api.registerWidget(RoundCompassWidget, {
   value: true,
-  damping: { type: 'FLOAT', default: 0.1 },
-  max_speed: { type: 'FLOAT', default: 1 },
+  mass: { type: 'FLOAT', default: 100 },
+  friction: { type: 'FLOAT', default: 0.2 },
   showValue: { type: 'BOOLEAN', default: false },
   half: { type: 'BOOLEAN', default: false },
   altTicks: { type: 'BOOLEAN', default: false },
