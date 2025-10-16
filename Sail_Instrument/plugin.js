@@ -1351,4 +1351,303 @@ function degrees(a) {
     return a * 180 / Math.PI;
 }
 
+
+function absSmallest(nums){
+  return nums.reduce((a,v)=>Math.abs(a)<Math.abs(v)?a:v);
+}
+
+var LinearCompassWidget = {
+    name: "LinearCompass",
+    caption: "Compass",
+    initFunction: function() {},
+    finalizeFunction: function() {},
+    renderCanvas: function(canvas, data, animated) {
+//      console.log(data,animated,new Date());
+
+      // set target value when called outside animation loop
+      if(!animated) canvas._c1=data.value;
+
+      const max_speed=data.max_speed;
+      const damping=data.damping;
+      const range=data.range;
+      const dir=data.flip?1:-1;
+
+      const c1=to360(canvas._c1), t1=Date.now();
+      const c0=to360(canvas._c0??c1), t0=canvas._t0??t1;
+      // shortest path through wrap around
+      const d=absSmallest([c1-c0, c1-c0+360, c1-c0-360]);
+      // dc = delta per animation frame, with upper limit and damping
+      const dc=Math.sign(d)*Math.min(max_speed,Math.abs(d)*damping);
+      const dt=t1-t0;
+      const course=c0+dc*dt/33; // scale with timestep for smooth appearance
+//      console.log(c1,c0,d,dc,dt,course);
+
+
+      const ctx = canvas.getContext('2d');
+      const bcr = canvas.getBoundingClientRect();
+//      console.log(bcr);
+      const w = bcr.width, h = bcr.height;
+      canvas.width=w; canvas.height=h;
+      const color=data.nightMode?'#d00':'black';
+      const color2=data.nightMode?'#66f':'#d00';
+      let H=Math.min(h/4,30);
+      let cx=w/2, cy=h/2+(data.showValue?0:H/2);
+      if(h<80) { H=h/2; cy=h-2; }
+      const px_per_deg=w/range;
+      const alt=data.altTicks; // alternate ticks
+      const step_deg=px_per_deg>4?1:px_per_deg>2?5:alt?15:10;
+      const font = Math.min(H,30)*Math.min(1,px_per_deg/2)+'px Arial';
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.moveTo(0, cy);
+      ctx.lineTo(w, cy);
+      ctx.stroke();
+
+      const c=Math.floor(course/step_deg)*step_deg; // floor center tick
+      const a=Math.floor((course-range/2)/step_deg)*step_deg; //first tick
+
+      const o=c-course; // translation offset
+      ctx.translate(cx+dir*o*px_per_deg,cy); // translate course to center
+
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color;
+      ctx.font = font;
+      ctx.fillStyle = color;
+      for(let i=0;i<=range;i+=step_deg){
+        const v=to360(i+a); // tick value
+        const x=dir*(i*px_per_deg-cx); // tick position
+        let y;
+        if(alt) y=!(v%45)?1:!(v%15)?0.8:!(v%5)?0.6:0.4;
+        else    y=!(v%30)?1:!(v%10)?0.8:!(v%5)?0.6:0.4;
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, -y*H);
+        ctx.lineWidth = Math.max(1,3*y);
+        ctx.stroke();
+        if(!(v%(alt?45:30))) {
+          let l=''+v;
+          if(v==0) l='N';
+          if(v==90) l='E';
+          if(v==180) l='S';
+          if(v==270) l='W';
+          if(v==45) l='NE';
+          if(v==135) l='SE';
+          if(v==225) l='SW';
+          if(v==315) l='NW';
+          let tw=ctx.measureText(l).width;
+          ctx.fillText(l, x-tw/2, -H*1.1);
+        }
+      }
+      ctx.restore();
+
+      ctx.translate(cx,cy);
+      if(data.showValue) {
+        ctx.font = font;
+        ctx.fillStyle = color;
+        l=to360(course).toFixed(0);
+        tw=ctx.measureText(l).width;
+        ctx.fillText(l, -tw/2, 1.9*H);
+      }
+
+      ctx.beginPath();
+      ctx.moveTo(0, 2);
+      ctx.lineTo(0, -H);
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = color2;
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0,-H/3);
+      ctx.lineTo(-H/3,H);
+      ctx.lineTo( H/3,H);
+      ctx.closePath();
+      ctx.fillStyle = color2;
+      ctx.fill();
+
+      ctx.restore();
+
+      if(w>0 && (animated || canvas._c0==null))
+      requestAnimationFrame(()=>LinearCompassWidget.renderCanvas(canvas, data, true));
+      canvas._c0=course;
+      canvas._t0=Date.now();
+    },
+};
+
+avnav.api.registerWidget(LinearCompassWidget, {
+  value: true,
+  range: { type: 'NUMBER', default: 180 },
+  damping: { type: 'FLOAT', default: 0.1 },
+  max_speed: { type: 'FLOAT', default: 1 },
+  showValue: { type: 'BOOLEAN', default: false },
+  flip: { type: 'BOOLEAN', default: false },
+  altTicks: { type: 'BOOLEAN', default: false },
+});
+
+var RoundCompassWidget = {
+    name: "RoundCompass",
+    caption: "Compass",
+    initFunction: function() {},
+    finalizeFunction: function() {},
+    renderCanvas: function(canvas, data, animated) {
+//      console.log(data,animated,new Date());
+      canvas.style.height='100%';
+
+      // set target value when called outside animation loop
+      if(!animated) canvas._c1=data.value;
+
+      const max_speed=data.max_speed;
+      const damping=data.damping;
+
+      const c1=to360(canvas._c1), t1=Date.now();
+      const c0=to360(canvas._c0??c1), t0=canvas._t0??t1;
+      // shortest path through wrap around
+      const d=absSmallest([c1-c0, c1-c0+360, c1-c0-360]);
+      // dc = delta per animation frame, with upper limit and damping
+      const dc=Math.sign(d)*Math.min(max_speed,Math.abs(d)*damping);
+      const dt=t1-t0;
+      const course=c0+dc*dt/33; // scale with timestep for smooth appearance
+//      console.log(c1,c0,d,dc,dt,course);
+
+
+      const ctx = canvas.getContext('2d');
+      const bcr = canvas.getBoundingClientRect();
+      const w = bcr.width, h = bcr.height;
+      canvas.width=w; canvas.height=h;
+      const color1=data.nightMode?'#d00':'black';
+      const color2=data.nightMode?'#66f':'#d00';
+      const half=data.half || h<300 || h/w<0.3;
+      const cx=w/2, cy=half?h:h/2, R=Math.min(cx,cy);
+      const alt=data.altTicks; // alternate ticks
+      const step_deg=R>300?1:R>150?5:alt?15:10;
+      const F=40*Math.max(0.3,Math.min(1,R/300));
+      ctx.font = F+'px Arial';
+
+      ctx.translate(cx,cy);
+      ctx.strokeStyle = color1;
+      ctx.fillStyle = color1;
+      ctx.save();
+
+      // tick marks
+      ctx.rotate(-radians(course));
+      for(let v=0;v<360;v+=step_deg){
+        ctx.beginPath();
+        let s; // tick length
+        if(alt) s=!(v%45)?1:!(v%15)?0.8:!(v%5)?0.6:0.4;
+        else    s=!(v%30)?1:!(v%10)?0.8:!(v%5)?0.6:0.4;
+        ctx.moveTo(0, -0.95*R);
+        ctx.lineTo(0, (-0.95+0.12*s)*R);
+        ctx.lineWidth = Math.max(1,4*s*Math.min(1,R/150));
+        ctx.stroke();
+        if(!(v%(alt?45:30))) {
+          let l=''+v;
+          if(v==0) l='N';
+          if(v==90) l='E';
+          if(v==180) l='S';
+          if(v==270) l='W';
+          if(v==45) l='NE';
+          if(v==135) l='SE';
+          if(v==225) l='SW';
+          if(v==315) l='NW';
+          let tw=ctx.measureText(l).width;
+          ctx.fillText(l, -tw/2, -0.85*R+F);
+        };
+        ctx.rotate(radians(step_deg));
+      }
+
+      ctx.restore();
+      // outer ring
+      ctx.beginPath();
+      ctx.arc(0,0, 0.95*R, 0, 2 * Math.PI);
+      ctx.strokeStyle = color1;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // marker
+      ctx.beginPath();
+      ctx.moveTo(0,-0.9*R);
+      ctx.lineTo(-0.03*R,-0.99*R);
+      ctx.lineTo( 0.03*R,-0.99*R);
+      ctx.closePath();
+      ctx.fillStyle = color2;
+      ctx.fill();
+      // value at center
+      if(data.showValue) {
+        let l=course.toFixed(0).padStart(3,'0');
+        ctx.font = 2*F+'px Arial';
+        let tw=ctx.measureText(l).width;
+        ctx.fillStyle = color1;
+        ctx.fillText(l, -tw/2, (half?-0.3*R:0)+0.7*F);
+      }
+
+      if(w>0 && (animated || canvas._c0==null))
+      requestAnimationFrame(()=>RoundCompassWidget.renderCanvas(canvas, data, true));
+      canvas._c0=course;
+      canvas._t0=Date.now();
+    },
+};
+
+avnav.api.registerWidget(RoundCompassWidget, {
+  value: true,
+  damping: { type: 'FLOAT', default: 0.1 },
+  max_speed: { type: 'FLOAT', default: 1 },
+  showValue: { type: 'BOOLEAN', default: false },
+  half: { type: 'BOOLEAN', default: false },
+  altTicks: { type: 'BOOLEAN', default: false },
+});
+
+
+var FuelGaugeWidget = {
+    name: "FuelGauge",
+    caption: "Fuel",
+    initFunction: function() {},
+    finalizeFunction: function() {},
+    renderCanvas: function(canvas, data) {
+//      console.log(data);
+      canvas.style.height='99%';
+      const ctx = canvas.getContext('2d');
+//      canvas.style.height='99%';
+      const bcr = canvas.getBoundingClientRect();
+//      console.log(bcr);
+      const w = bcr.width, h = bcr.height;
+      canvas.width=w; canvas.height=h;
+
+      let p,v;
+      let m=data.maxValue;
+      if(data.relative){
+        p=data.value*(data.percent?1/100:1);
+        v=p*m;
+      }else{
+        v=data.value;
+        p=v/m;
+      }
+
+      const b=5;
+      const H=(h-2*b)*Math.max(0,Math.min(1,p));
+
+      ctx.fillStyle = data.color;
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = 2;
+      ctx.fillRect(b, h-b, w-2*b, -H);
+      ctx.strokeRect(b, b, w-2*b, h-2*b);
+
+      let fs=30*Math.min(Math.min(w/200,h/60),1);
+      ctx.font = fs+'px Arial';
+      ctx.fillStyle = 'black';
+      let l=(p*100).toFixed(0)+'% '+data.formatter(v,...data.formatterParameters)+(data.unit??'');
+      let tw=ctx.measureText(l).width;
+      ctx.fillText(l, w/2-tw/2, h/2+fs/2);
+    },
+};
+
+avnav.api.registerWidget(FuelGaugeWidget, {
+  value: true,
+  formatter: true,
+  formatterParameters: true,
+  color: { type: 'COLOR', default: '#8888ff' },
+  maxValue: { type: 'FLOAT', default: 1 },
+  relative: { type: 'BOOLEAN', default: false },
+  percent: { type: 'BOOLEAN', default: false },
+});
 })();
