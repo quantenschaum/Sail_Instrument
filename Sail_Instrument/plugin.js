@@ -1518,7 +1518,7 @@ var RoundCompassWidget = {
       canvas.width=w; canvas.height=h;
       const color1=data.nightMode?'#d00':'black';
       const color2=data.nightMode?'#66f':'#d00';
-      const half=data.half || h<300 || h/w<0.3;
+      const half=data.half || h<300 || h/w<0.5;
       const cx=w/2, cy=half?h:h/2, R=Math.min(cx,cy);
       const alt=data.altTicks; // alternate ticks
       const step_deg=R>300?1:R>150?5:alt?15:10;
