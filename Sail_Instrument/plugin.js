@@ -1358,9 +1358,8 @@ var FuelGaugeWidget = {
     finalizeFunction: function() {},
     renderCanvas: function(canvas, data) {
 //      console.log(data);
-      canvas.style.height='99%';
+      canvas.style.height='100%';
       const ctx = canvas.getContext('2d');
-//      canvas.style.height='99%';
       const bcr = canvas.getBoundingClientRect();
 //      console.log(bcr);
       const w = bcr.width, h = bcr.height;
