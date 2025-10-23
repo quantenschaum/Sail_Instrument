@@ -1351,6 +1351,11 @@ function degrees(a) {
     return a * 180 / Math.PI;
 }
 
+function fixed(value,n){
+  if(value==null||!isFinite(value)) return '---';
+  return value.toFixed(n);
+}
+
 var FuelGaugeWidget = {
     name: "FuelGauge",
     caption: "Fuel",
@@ -1387,7 +1392,7 @@ var FuelGaugeWidget = {
       let fs=30*Math.min(Math.min(w/200,h/60),1);
       ctx.font = fs+'px Arial';
       ctx.fillStyle = 'black';
-      let l=(p*100).toFixed(0)+'% '+data.formatter(v,...data.formatterParameters)+(data.unit??'');
+      let l=fixed(p*100,0)+'% '+data.formatter(v,...data.formatterParameters)+(data.unit??'');
       let tw=ctx.measureText(l).width;
       ctx.fillText(l, w/2-tw/2, h/2+fs/2);
     },
@@ -1418,7 +1423,7 @@ class Inertia {
   integrate(force, position){
     const time=Date.now();
     const dt=Math.min(this.tmax,(time-this.time)/33); // dt=1 per frame at 30Hz
-    if(dt==this.tmax && position!=null){
+    if(dt==this.tmax && position!=null || !isFinite(this.position)){
       this.acceleration=0;
       this.speed=0;
       this.position=position;
@@ -1528,7 +1533,7 @@ var LinearCompassWidget = {
         if(data.showValue) {
           ctx.font = font;
           ctx.fillStyle = color;
-          l=course.toFixed(0);
+          l=fixed(course,0);
           tw=ctx.measureText(l).width;
           ctx.fillText(l, -tw/2, 1.9*H);
         }
@@ -1634,7 +1639,7 @@ var RoundCompassWidget = {
         ctx.fill();
         // value at center
         if(data.showValue) {
-          let l=course.toFixed(0).padStart(3,'0');
+          let l=fixed(course,0).padStart(3,'0');
           ctx.font = 2*F+'px Arial';
           let tw=ctx.measureText(l).width;
           ctx.fillStyle = color1;
@@ -1749,7 +1754,7 @@ var RoundCompass2Widget = {
         ctx.stroke();
         // value at center
         if(data.showValue) {
-          let l=course.toFixed(1).padStart(3,'0');
+          let l=fixed(course,1).padStart(3,'0');
           ctx.font = 4*F+'px '+font;
           let tw=ctx.measureText(l).width;
           ctx.fillStyle = color1;
@@ -1780,7 +1785,7 @@ var SVGCompass = {
 //        console.log('UPDATE');
         if(data.showValue){
           const val=canvas.div.getElementsByTagName('div')[2];
-          val.textContent=rot.toFixed(0);
+          val.textContent=fixed(rot,0);
         }
         const ele=canvas.div.getElementsByTagName('div')[0];
 //        console.log(ele);
@@ -1808,7 +1813,7 @@ var SVGCompass = {
       canvas.div.innerHTML=`<div class="SIcompass" style="transform: ${t} rotate(${-rot}deg); ${s}"></div><div class="SImarker" style="transform: ${t}; ${s}"></div>`;
       canvas.style.display='none';
       if(data.showValue){
-        canvas.div.innerHTML+=`<div class="SIvalue" style="font-size:${a/7}px; ${half?'bottom:0;':''}">${rot.toFixed(0)}</div>`;
+        canvas.div.innerHTML+=`<div class="SIvalue" style="font-size:${a/7}px; ${half?'bottom:0;':''}">${fixed(rot,0)}</div>`;
       }
   },
 };
