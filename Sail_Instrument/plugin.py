@@ -468,7 +468,7 @@ class Plugin(object):
         k = phi + rad
         p, r = data[phi], data[rad]
         w = toCart((p, r))
-        if k in filtered:
+        if k in filtered and all(map(isfinite,filtered[k])):
             a = self.smoothing_factor(phi)
             assert 0 < a <= 1
             v = filtered[k]
@@ -1002,4 +1002,3 @@ def add_polar(a, b):
     a, b = toCart(a), toCart(b)
     s = a[0] + b[0], a[1] + b[1]
     return toPol(s)
-
