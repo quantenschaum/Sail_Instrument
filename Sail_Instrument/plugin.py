@@ -162,7 +162,7 @@ CONFIG = [
     {
         "name": SMOOTHING_SD,
         "description": "exponential smoothing time (s) for set/drift",
-        "default": "900",
+        "default": "600",
         "type": "NUMBER",
     },
     {
