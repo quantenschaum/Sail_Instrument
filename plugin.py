@@ -258,7 +258,7 @@ CONFIG = [
     {
         "name": WMM_FILE,
         "description": "file with WMM-coefficents for magnetic variation",
-        "default": "WMM2020.COF",
+        "default": "WMM2025.COF",
     },
     {
         "name": WMM_PERIOD,
@@ -299,7 +299,7 @@ CONFIG = [
         "name": TALKER_ID,
         "description": "NMEA talker ID for emitted sentences",
         "type": "STRING",
-        "default": "CA",
+        "default": "SI",
     },
     {
         "name": DECODE,
