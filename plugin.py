@@ -36,7 +36,7 @@ import scipy.interpolate
 import scipy.optimize
 
 try:
-    from avnrouter import AVNRouter, WpData
+    from avnrouter import AVNRouter
     from avnav_worker import AVNWorker
     from avnav_nmea import NMEAParser
 except:
@@ -45,6 +45,7 @@ except:
 hasgeomag = False
 
 try:
+    # https://www.ncei.noaa.gov/products/world-magnetic-model
     sys.path.insert(0, os.path.dirname(__file__) + "/lib")
     import geomag
 
