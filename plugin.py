@@ -487,11 +487,11 @@ class Plugin(object):
         if phi == 'TWD':
             v = filtered.get('TWDS')
             if not v or not isfinite(v):
-                filtered[k] = 0
-            v = filtered.get('TWDS')
+                filtered['TWDS'] = 0
+            v = filtered['TWDS']
             delta = data[phi] - data["TWDF"]
             a = self.smoothing_factor(phi)
-            v = filtered[k] = (1 - a) * v + a * delta**2
+            v = filtered['TWDS'] = (1 - a) * v + a * delta**2
             data['TWDS']=sqrt(v)
 
     def run(self):
