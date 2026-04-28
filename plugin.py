@@ -67,7 +67,6 @@ SMOOTHING_SD = "smoothing_sd"
 SMOOTHING_COG = "smoothing_cog"
 SMOOTHING_CTW = "smoothing_ctw"
 SMOOTHING_HDT = "smoothing_hdt"
-MM_SAMPLES = "minmax_samples"
 GROUND_WIND = "ground_wind"
 FALLBACK = "allow_fallback"
 TACK_ANGLE = "tack_angle"
@@ -182,12 +181,6 @@ CONFIG = [
         "name": SMOOTHING_HDT,
         "description": "exponential smoothing time (s) for HDT/STW",
         "default": "5",
-        "type": "NUMBER",
-    },
-    {
-        "name": MM_SAMPLES,
-        "description": "number of samples for calculating min/max of TWD",
-        "default": "200",
         "type": "NUMBER",
     },
     {
