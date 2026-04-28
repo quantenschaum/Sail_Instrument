@@ -29,16 +29,16 @@ import re
 import shutil
 import sys
 import time
-from math import sin, cos, radians, degrees, sqrt, atan2, isfinite, copysign, exp
+from math import atan2, copysign, cos, degrees, exp, isfinite, radians, sin, sqrt
 
 import numpy
 import scipy.interpolate
 import scipy.optimize
 
 try:
-    from avnrouter import AVNRouter
-    from avnav_worker import AVNWorker
     from avnav_nmea import NMEAParser
+    from avnav_worker import AVNWorker
+    from avnrouter import AVNRouter
 except:
     pass
 
@@ -343,9 +343,9 @@ class Plugin(object):
 
     def __init__(self, api):
         self.api = api
-        assert (
-            MIN_AVNAV_VERSION <= self.api.getAvNavVersion()
-        ), "incompatible AvNav version"
+        assert MIN_AVNAV_VERSION <= self.api.getAvNavVersion(), (
+            "incompatible AvNav version"
+        )
 
         self.api.registerEditableParameters(CONFIG, self.changeParam)
         self.api.registerRestart(self.stop)
@@ -382,8 +382,7 @@ class Plugin(object):
         config = {}
         for c in CONFIG:
             name = c["name"]
-            TYPES = {"FLOAT": float, "NUMBER": int,
-                     "BOOLEAN": lambda s: s == "True"}
+            TYPES = {"FLOAT": float, "NUMBER": int, "BOOLEAN": lambda s: s == "True"}
             value = self.getConfigValue(name)
             value = TYPES.get(c.get("type"), str)(value)
             config[name] = value
@@ -436,7 +435,10 @@ class Plugin(object):
                 # self.api.log(f"WMM error {x}")
                 self.msg += f" WMM error {x}"
                 return
-        if self.variation is None or time.monotonic() - self.variation_time > self.config[WMM_PERIOD]:
+        if (
+            self.variation is None
+            or time.monotonic() - self.variation_time > self.config[WMM_PERIOD]
+        ):
             self.variation = self.variation_model.GeoMag(lat, lon).dec
             self.variation_time = time.monotonic()
         return self.variation
@@ -450,15 +452,24 @@ class Plugin(object):
 
     def smoothing_factor(self, phi):
         dt = self.config[PERIOD]
-        tau = self.config[SMOOTHING_TW if phi.startswith('TW') else
-                          SMOOTHING_AW if phi.startswith('AW') else
-                          SMOOTHING_SD if phi=='SET' else
-                          SMOOTHING_COG if phi=='COG' else
-                          SMOOTHING_CTW if phi=='CTW' else
-                          SMOOTHING_HDT if phi=='HDT' else
-                          None]
-        if tau<=0: return 1
-        return 1-exp(-dt/tau)
+        tau = self.config[
+            SMOOTHING_TW
+            if phi.startswith("TW")
+            else SMOOTHING_AW
+            if phi.startswith("AW")
+            else SMOOTHING_SD
+            if phi == "SET"
+            else SMOOTHING_COG
+            if phi == "COG"
+            else SMOOTHING_CTW
+            if phi == "CTW"
+            else SMOOTHING_HDT
+            if phi == "HDT"
+            else None
+        ]
+        if tau <= 0:
+            return 1
+        return 1 - exp(-dt / tau)
 
     def smooth(self, data, phi, rad):
         if not hasattr(self, "filtered"):
@@ -469,33 +480,26 @@ class Plugin(object):
         k = phi + rad
         p, r = data[phi], data[rad]
         w = toCart((p, r))
-        if k in filtered and all(map(isfinite,filtered[k])):
+        if k in filtered and all(map(isfinite, filtered[k])):
             a = self.smoothing_factor(phi)
             assert 0 < a <= 1
             v = filtered[k]
-            filtered[k] = [(1-a)*v[i] + a*w[i] for i in (0, 1)]
+            filtered[k] = [(1 - a) * v[i] + a * w[i] for i in (0, 1)]
         else:
             filtered[k] = w
         p, r = toPol(filtered[k])
         data[phi + "F"] = to180(p) if phi[-1] == "A" else p
         data[rad + "F"] = r
 
-    def min_max(self, data, key, func=lambda x: x):
-        if not hasattr(self, "min_max_values"):
-            self.min_max_values = {}
-        min_max_values = self.min_max_values
-        if key not in data:
-            return
-        v = data[key]
-        if key not in min_max_values:
-            min_max_values[key] = []
-        values = min_max_values[key]
-        values.append(func(v))
-        samples = self.config[MM_SAMPLES]
-        assert 0 < samples
-        while len(values) > samples:
-            values.pop(0)
-        data[key + "MIN"], data[key + "MAX"] = min(values), max(values)
+        if phi == 'TWD':
+            v = filtered.get('TWDS')
+            if not v or not isfinite(v):
+                filtered[k] = 0
+            v = filtered.get('TWDS')
+            delta = data[phi] - data["TWDF"]
+            a = self.smoothing_factor(phi)
+            v = filtered[k] = (1 - a) * v + a * delta**2
+            data['TWDS']=sqrt(v)
 
     def run(self):
         self.read_config()
@@ -505,18 +509,25 @@ class Plugin(object):
             try:
                 self.msg = ""
                 data = {k: self.readValue(p) for k, p in INPUT_FIELDS.items()}
-                data["HEL"] = data["HEL"] or data["HEL1"] or (
-                    degrees(data["HEL2"]) if data.get("HEL2") is not None else None)
+                data["HEL"] = (
+                    data["HEL"]
+                    or data["HEL1"]
+                    or (degrees(data["HEL2"]) if data.get("HEL2") is not None else None)
+                )
                 present = {k for k in data.keys() if data[k] is not None}
 
-                data["LEF"] = self.config[LEEWAY_FACTOR] / KNOTS ** 2
+                data["LEF"] = self.config[LEEWAY_FACTOR] / KNOTS**2
 
-                if data["VAR"] is None and all(data.get(k) is not None for k in ("LAT", "LON")):
+                if data["VAR"] is None and all(
+                    data.get(k) is not None for k in ("LAT", "LON")
+                ):
                     data["VAR"] = self.mag_variation(data["LAT"], data["LON"])
                     self.msg += ", variation from WMM"
 
                 if self.config[FALLBACK]:
-                    if data["HDT"] is None and any(data.get(k) is None for k in ("HDM", "VAR")):
+                    if data["HDT"] is None and any(
+                        data.get(k) is None for k in ("HDM", "VAR")
+                    ):
                         data["HDT"] = data["COG"]
                         self.msg += ", fallback HDT=COG"
                     if data["STW"] is None:
@@ -526,15 +537,29 @@ class Plugin(object):
                 if data["DEV"] is None:
                     data["DEV"] = 0
 
-                if all(data.get(k) is None for k in ("AWA", "AWS", "TWA", "TWS", "TWD")):
+                if all(
+                    data.get(k) is None for k in ("AWA", "AWS", "TWA", "TWS", "TWD")
+                ):
                     data["GWD"], data["GWS"] = self.manual_wind() or (None, None)
-                    if all(data.get(k) is not None for k in ("GWD","GWS")):
-                      if data["COG"] is None and (data["SOG"] or 0)<self.config[VMIN]:
-                          data["COG"],data["SOG"] = 0,0 # allow to compute TW w/o COG if not moving
-                      self.msg += ", manually entered wind"
+                    if all(data.get(k) is not None for k in ("GWD", "GWS")):
+                        if (
+                            data["COG"] is None
+                            and (data["SOG"] or 0) < self.config[VMIN]
+                        ):
+                            data["COG"], data["SOG"] = (
+                                0,
+                                0,
+                            )  # allow to compute TW w/o COG if not moving
+                        self.msg += ", manually entered wind"
 
-                if data["HEL"] is None and self.heels and all(d.has(k) for k in ("TWAF", "TWSF")):
-                    data["HEL"] = copysign(self.heels.value(d["TWAF"], d["TWSF"] * KNOTS), -d["TWAF"])
+                if (
+                    data["HEL"] is None
+                    and self.heels
+                    and all(d.has(k) for k in ("TWAF", "TWSF"))
+                ):
+                    data["HEL"] = copysign(
+                        self.heels.value(d["TWAF"], d["TWSF"] * KNOTS), -d["TWAF"]
+                    )
                     self.msg += ", heel from polar"
 
                 if data["HEL"] is not None:
@@ -546,19 +571,26 @@ class Plugin(object):
                 data["DRT"] = draught if draught >= 0 else None
                 data["BRG"] = bearing_to_waypoint()
 
-                data = {k: (to180(v) if k.endswith("A") and v else v) for k, v in data.items() if len(k) == 3}
+                data = {
+                    k: (to180(v) if k.endswith("A") and v else v)
+                    for k, v in data.items()
+                    if len(k) == 3
+                }
 
                 data = d = CourseData(**data)  # compute missing values
 
                 self.smooth(data, "AWD", "AWS")
-                data["AWAF"] = to360(data["AWDF"] - data["HDT"]) if d.has("AWDF", "HDT") else None
+                data["AWAF"] = (
+                    to360(data["AWDF"] - data["HDT"]) if d.has("AWDF", "HDT") else None
+                )
                 self.smooth(data, "TWD", "TWS")
-                data["TWAF"] = to180(data["TWDF"] - data["HDT"]) if d.has("TWDF", "HDT") else None
+                data["TWAF"] = (
+                    to180(data["TWDF"] - data["HDT"]) if d.has("TWDF", "HDT") else None
+                )
                 self.smooth(data, "SET", "DFT")
                 self.smooth(data, "COG", "SOG")
                 self.smooth(data, "HDT", "STW")
                 self.smooth(data, "CTW", "STW")
-                self.min_max(data, "TWD", lambda v: to180(v - data["TWDF"]))
                 for k in ("AWS", "TWS", "DFT"):
                     if k not in data:
                         data[k + "F"] = 0
@@ -584,9 +616,13 @@ class Plugin(object):
                 ID = self.config[TALKER_ID]
                 if nmea_write:
                     for f, s in NMEA_SENTENCES.items():
-                        if any(k in calculated for k in f.split(",")) and data.has(*f.split(",")):
-                            s = eval(f"f\"{s}\"")
-                            if not nmea_filter or NMEAParser.checkFilter(s, nmea_filter):
+                        if any(k in calculated for k in f.split(",")) and data.has(
+                            *f.split(",")
+                        ):
+                            s = eval(f'f"{s}"')
+                            if not nmea_filter or NMEAParser.checkFilter(
+                                s, nmea_filter
+                            ):
                                 # print(">", s)
                                 self.api.addNMEA(
                                     s,
@@ -598,12 +634,16 @@ class Plugin(object):
                                 sending.add(s[:6])
                         elif not data.has(*f.split(",")):
                             self.api.debug(
-                                " Cannot send NMEA_SENTENCE $%s[%s] because missing: %s", s[5:8], f, {
-                                j for j in f.split(",") if data[j] is None})
+                                " Cannot send NMEA_SENTENCE $%s[%s] because missing: %s",
+                                s[5:8],
+                                f,
+                                {j for j in f.split(",") if data[j] is None},
+                            )
 
                 self.api.setStatus(
                     "NMEA",
-                    f"present:{sorted(present)} --> calculated:{sorted(calculated)} sending:{sorted(sending)}{self.msg}")
+                    f"present:{sorted(present)} --> calculated:{sorted(calculated)} sending:{sorted(sending)}{self.msg}",
+                )
             except Exception as x:
                 self.api.error(f"{x}")
                 self.api.setStatus("ERROR", f"{x}")
@@ -631,46 +671,61 @@ class Plugin(object):
             data.VMCA, data.VMCB = -1, -1
             # data.VPOL, data.POLAR = 0, 0
 
-            data.LLSV = data.LLPV = data.STWF # velocities on laylines
+            data.LLSV = data.LLPV = data.STWF  # velocities on laylines
 
-            fixed_laylines=False
+            fixed_laylines = False
             if upwind and tack_angle or not upwind and gybe_angle:
                 data.LAY = (tack_angle / 2) if upwind else (180 - gybe_angle / 2)
-                data.LLS, data.LLP = to360(twd-data.LAY), to360(twd+data.LAY) # absolute layline directions
-                fixed_laylines=True
+                data.LLS, data.LLP = (
+                    to360(twd - data.LAY),
+                    to360(twd + data.LAY),
+                )  # absolute layline directions
+                fixed_laylines = True
                 self.msg += ", fixed laylines"
                 # return
             else:
-                if not self.polar: return
+                if not self.polar:
+                    return
 
                 if self.config[LAYLINES_FROM_POLAR] or not self.polar.has_angle(upwind):
-                    data.LAY = abs(to180(self.polar.vmc_angle(0, tws, 0 if upwind else 180)))
+                    data.LAY = abs(
+                        to180(self.polar.vmc_angle(0, tws, 0 if upwind else 180))
+                    )
                     self.msg += ", laylines from polar"
                 else:
                     data.LAY = self.polar.angle(tws, upwind)
                     self.msg += ", laylines from table"
 
-            leeway = list(map(float,self.config[LAYLINES_LEEWAY].split(',')))[0 if upwind else 1]
-            data.LLS, data.LLP = to360(twd-data.LAY-leeway), to360(twd+data.LAY+leeway) # absolute layline directions incl. leeway
+            leeway = list(map(float, self.config[LAYLINES_LEEWAY].split(",")))[
+                0 if upwind else 1
+            ]
+            data.LLS, data.LLP = (
+                to360(twd - data.LAY - leeway),
+                to360(twd + data.LAY + leeway),
+            )  # absolute layline directions incl. leeway
 
-            if self.config[LAYLINES_WITH_CURENT] and data.has('SETF','DFTF','LAY'): # laylines over ground
-              data.LLS,data.LLSV=add_polar((data.SETF,data.DFTF),(data.LLS,data.LLSV)) # stbd layline incl. current
-              data.LLP,data.LLPV=add_polar((data.SETF,data.DFTF),(data.LLP,data.LLPV)) # port layline incl. current
-              self.msg += ", laylines over ground"
+            if self.config[LAYLINES_WITH_CURENT] and data.has(
+                "SETF", "DFTF", "LAY"
+            ):  # laylines over ground
+                data.LLS, data.LLSV = add_polar(
+                    (data.SETF, data.DFTF), (data.LLS, data.LLSV)
+                )  # stbd layline incl. current
+                data.LLP, data.LLPV = add_polar(
+                    (data.SETF, data.DFTF), (data.LLP, data.LLPV)
+                )  # port layline incl. current
+                self.msg += ", laylines over ground"
 
-            if fixed_laylines: return
+            if fixed_laylines:
+                return
 
-            data.VPOL = self.config[POLAR_FACTOR]*self.polar.value(twa, tws)
-            if data.has("VPOL","STW"):
-                data.VPP = 100*data.STW/data.VPOL
+            data.VPOL = self.config[POLAR_FACTOR] * self.polar.value(twa, tws)
+            if data.has("VPOL", "STW"):
+                data.VPP = 100 * data.STW / data.VPOL
             self.msg += ", calculate VPOL"
 
             if self.config[SHOW_POLAR]:
                 values = numpy.array(
-                    [
-                        self.polar.value(a, tws)
-                        for a in numpy.linspace(0, 180, 36)
-                    ]
+                    [self.polar.value(a, tws) for a in numpy.linspace(0, 180, 36)]
                 )
                 values /= max(1, values.max())
                 data.POLAR = ",".join([f"{v:.2f}" for v in values])
@@ -713,7 +768,7 @@ class Polar:
 
     def angle(self, tws, upwind):
         angle = self.data["beat_angle" if upwind else "run_angle"]
-        return numpy.interp(tws*KNOTS, self.data["TWS"], angle)
+        return numpy.interp(tws * KNOTS, self.data["TWS"], angle)
 
     def value(self, twa, tws):
         """
@@ -727,13 +782,15 @@ class Polar:
             val = "STW" if "STW" in self.data else "heel"
             try:
                 interp2d = scipy.interpolate.RectBivariateSpline
-                kw = {"kx":1, "ky":min(1,len(self.data["TWS"])-1)}
+                kw = {"kx": 1, "ky": min(1, len(self.data["TWS"]) - 1)}
             except:
                 interp2d = scipy.interpolate.interp2d
                 kw = {}
-            self.spl = interp2d(self.data["TWA"], self.data["TWS"], self.data[val],**kw)
+            self.spl = interp2d(
+                self.data["TWA"], self.data["TWS"], self.data[val], **kw
+            )
 
-        return float(self.spl(abs(to180(twa)), tws*KNOTS))*MPS
+        return float(self.spl(abs(to180(twa)), tws * KNOTS)) * MPS
 
     def vmc_angle(self, twd, tws, brg, s=1):
         """
@@ -750,7 +807,7 @@ class Polar:
             # negative sign for minimizer
             return -self.value(twa, tws) * cos(radians(s * twa - abs(brg_twd)))
 
-        res = scipy.optimize.minimize_scalar(vmc, bounds=(0, 180), method='bounded')
+        res = scipy.optimize.minimize_scalar(vmc, bounds=(0, 180), method="bounded")
 
         if res.success:
             return to360(twd + s * copysign(res.x, brg_twd))
@@ -881,9 +938,7 @@ class CourseData:
 
         if self.misses("LEE") and self.has("HEL", "STW", "LEF"):
             self.LEE = (
-                max(-30, min(30, self.LEF * self.HEL / self.STW ** 2))
-                if self.STW
-                else 0
+                max(-30, min(30, self.LEF * self.HEL / self.STW**2)) if self.STW else 0
             )
 
         if self.misses("LEE"):
@@ -939,7 +994,6 @@ class CourseData:
         if self.misses("DBK") and self.has("DBS", "DRT"):
             self.DBK = self.DBS - self.DRT
 
-
     def __getattribute__(self, item):
         if re.match("[A-Z]+", item):
             return self._data.get(item)
@@ -978,14 +1032,14 @@ class CourseData:
 
 
 def to360(a):
-    'limit angle a to [0,360)'
+    "limit angle a to [0,360)"
     # Python's modulo always returns same sign as divisor
     # it is done twice to fix round off errors (like for a=-1e-14)
     return (a % 360) % 360
 
 
 def to180(a):
-    'limit angle a to [-180,+180)'
+    "limit angle a to [-180,+180)"
     return to360(a + 180) - 180
 
 

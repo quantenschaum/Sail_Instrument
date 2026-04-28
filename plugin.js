@@ -621,11 +621,10 @@
       AWD: "nav.gps.sail_instrument.AWDF",
       AWS: "nav.gps.sail_instrument.AWSF",
       TWD: "nav.gps.sail_instrument.TWDF",
+      TWDS: "nav.gps.sail_instrument.TWDS",
       TWS: "nav.gps.sail_instrument.TWSF",
       SET: "nav.gps.sail_instrument.SETF",
       DFT: "nav.gps.sail_instrument.DFTF",
-      minTWD: "nav.gps.sail_instrument.TWDMIN",
-      maxTWD: "nav.gps.sail_instrument.TWDMAX",
       VMG: "nav.gps.sail_instrument.VMG",
       VMC: "nav.gps.sail_instrument.VMC",
       VMCA: "nav.gps.sail_instrument.VMCA",
@@ -754,11 +753,10 @@
       AWD: "nav.gps.sail_instrument.AWDF",
       AWS: "nav.gps.sail_instrument.AWSF",
       TWD: "nav.gps.sail_instrument.TWDF",
+      TWDS: "nav.gps.sail_instrument.TWDS",
       TWS: "nav.gps.sail_instrument.TWSF",
       SET: "nav.gps.sail_instrument.SETF",
       DFT: "nav.gps.sail_instrument.DFTF",
-      minTWD: "nav.gps.sail_instrument.TWDMIN",
-      maxTWD: "nav.gps.sail_instrument.TWDMAX",
       VMCA: "nav.gps.sail_instrument.VMCA",
       VMCB: "nav.gps.sail_instrument.VMCB",
       POLAR: "nav.gps.sail_instrument.POLAR",
@@ -842,14 +840,19 @@
           data.nightMode ? "#aaa" : "black",
         );
       }
-      let mm = [data.minTWD, data.maxTWD];
-      drawLayline(ctx, size, maprotation + data.TWD - data.LAY, mm, green);
-      drawLayline(ctx, size, maprotation + data.TWD + data.LAY, mm, red);
+      drawLayline(
+        ctx,
+        size,
+        maprotation + data.TWD - data.LAY,
+        data.TWDS,
+        green,
+      );
+      drawLayline(ctx, size, maprotation + data.TWD + data.LAY, data.TWDS, red);
       if (data.VMCA >= 0) {
-        drawLayline(ctx, size, maprotation + data.VMCA, [0, 0], blue);
+        drawLayline(ctx, size, maprotation + data.VMCA, 0, blue);
       }
       if (data.VMCB >= 0) {
-        drawLayline(ctx, size, maprotation + data.VMCB, [0, 0], "lightblue");
+        drawLayline(ctx, size, maprotation + data.VMCB, 0, "lightblue");
       }
     }
     if (knots(data.AWS) >= 1) {
@@ -1246,7 +1249,7 @@
     ctx.restore();
   }
 
-  function drawLayline(ctx, radius, angle, minmax, color) {
+  function drawLayline(ctx, radius, angle, adev, color) {
     ctx.save();
     radius = 0.9 * radius;
     ctx.rotate(radians(angle));
@@ -1262,14 +1265,15 @@
     ctx.stroke();
 
     // sectors
-    ctx.globalAlpha *= 0.3;
-    ctx.beginPath();
-    ctx.moveTo(0, 0);
-    ctx.arc(0, 0, radius, radians(minmax[0] - 90), radians(minmax[1] - 90));
-    ctx.closePath();
-
-    ctx.fillStyle = color;
-    ctx.fill();
+    if (adev) {
+      ctx.globalAlpha *= 0.3;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, radius, radians(-adev - 90), radians(+adev - 90));
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
     ctx.restore();
   }
 
