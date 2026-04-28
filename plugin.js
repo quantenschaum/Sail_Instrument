@@ -2168,7 +2168,7 @@
       );
     if (digits == 0) return number.toFixed(0);
     if (number < 0 && !signed) digits -= 1; // make room for unexpected sign
-    let sign = number < 0 ? "-" : signed ? positiveSign : "";
+    let sign = number < 0 ? "-" : signed ? (positiveSign || " ") : "";
     number = Math.abs(number);
     let decPlaces = digits - 1 - Math.floor(Math.log10(number));
     decPlaces = fixed ? maxFrac : clamp(0, decPlaces, maxFrac);
@@ -2186,6 +2186,50 @@
       return (sign + str).padStart(n + sign.length, " ") + dot; // __-1.23
     }
   }
+  formatFloat.parameters = [
+    {
+      name: "digits",
+      type: "NUMBER",
+      default: 3,
+      description:
+        "number of (significant) digits in total, negative: padding space is added for sign",
+    },
+    {
+      name: "maxFrac",
+      type: "NUMBER",
+      default: 2,
+      description:
+        "max. number of fractional digits (after the decimal point, default = digits-1, 0 = integer, <0 = fixed)",
+    },
+    {
+      name: "leadingZeroes",
+      type: "BOOLEAN",
+      default: false,
+      description: "output leading zeroes instead of leading spaces",
+    },
+    {
+      name: "trailingDot",
+      type: "BOOLEAN",
+      default: true,
+      description:
+        "output . if decimal separator is at right end (maxFrac=0 implies false)",
+    },
+    {
+      name: "overflow",
+      type: "STRING",
+      default: "#",
+      description:
+        "character to show on overflow (number needs more digits than allowed, if empty overflow is allowed)",
+    },
+    {
+      name: "positiveSign",
+      type: "STRING",
+      default: " ",
+      description:
+        "sign to show for numbers>0 if digits<0 (set to + to show positive sign)",
+    },
+  ];
+  avnav.api.registerFormatter("0float", formatFloat);
 
   function convertTo(value, unit) {
     let f = 1.0;
@@ -2291,7 +2335,7 @@
 
   avnav.api.registerWidget(uniWidget, {
     value: true,
-    formatter: true,
+    formatter: false,
     format: {
       type: "SELECT",
       list: ["0.00", "180", "360", "HH:MM", "TTG", "DD", "DDM", "DMS"],
