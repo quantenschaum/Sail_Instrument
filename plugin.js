@@ -91,7 +91,7 @@
               : data.tack == "opposite"
                 ? time_o
                 : time_t;
-          var val = avnav.api.formatter.formatTime(toDateTime(time), false);
+          var val = formatHHMM(time*1000);
         }
         if (direct && data.tack == "opposite") val = "---";
       } catch (error) {
