@@ -50,8 +50,8 @@
       try {
         let stb = to180(data.TWA) > 0;
         let is = calc_intersections(self, data);
-        //          console.log(is);
-        if (typeof is == "undefined") {
+        // console.log(is);
+        if (!is) {
           // use direct distance and VMC
           var direct = true;
           var WP = new LatLon(data.WP.lat, data.WP.lon);
@@ -91,7 +91,7 @@
               : data.tack == "opposite"
                 ? time_o
                 : time_t;
-          var val = formatHHMM(time*1000);
+          var val = formatTTG(time);
         }
         if (direct && data.tack == "opposite") val = "---";
       } catch (error) {
@@ -2168,7 +2168,7 @@
       );
     if (digits == 0) return number.toFixed(0);
     if (number < 0 && !signed) digits -= 1; // make room for unexpected sign
-    let sign = number < 0 ? "-" : signed ? (positiveSign || " ") : "";
+    let sign = number < 0 ? "-" : signed ? positiveSign || " " : "";
     number = Math.abs(number);
     let decPlaces = digits - 1 - Math.floor(Math.log10(number));
     decPlaces = fixed ? maxFrac : clamp(0, decPlaces, maxFrac);
@@ -2273,7 +2273,7 @@
   function formatTTG(value, seconds) {
     value = parseInt(value);
     if (!isFinite(value) || value < 0) return "--:--" + (seconds ? ":--" : "");
-    const SEC = Math.round(Math.abs(value / 1000));
+    const SEC = Math.round(Math.abs(value));
     const sec = SEC % 60;
     const MIN = Math.floor(SEC / 60);
     const min = MIN % 60;
@@ -2312,7 +2312,7 @@
     formatter: avnav.api.formatter.formatString,
     renderHtml: function (data) {
       let value = data.value;
-      if (data.format == "TTG") value = value - data.TIME;
+      if (data.format == "TTG") value = (value - data.TIME) / 1000;
       if (value instanceof Date) value = value.getTime();
       if (data.format.startsWith("D"))
         value = { lat: data.LAT, lon: data.LON, ...data.value };

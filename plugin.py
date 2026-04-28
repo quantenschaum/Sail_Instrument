@@ -633,31 +633,32 @@ class Plugin(object):
 
             data.LLSV = data.LLPV = data.STW # velocities on laylines
 
+            fixed_laylines=False
             if upwind and tack_angle or not upwind and gybe_angle:
                 data.LAY = (tack_angle / 2) if upwind else (180 - gybe_angle / 2)
                 data.LLS, data.LLP = to360(twd-data.LAY), to360(twd+data.LAY) # absolute layline directions
+                fixed_laylines=True
                 self.msg += ", fixed laylines"
-                return
-
-            if not self.polar:
-                return
-
-            if self.config[LAYLINES_FROM_POLAR] or not self.polar.has_angle(upwind):
-                data.LAY = abs(to180(self.polar.vmc_angle(0, tws, 0 if upwind else 180)))
-                self.msg += ", laylines from polar"
+                # return
             else:
-                data.LAY = self.polar.angle(tws, upwind)
-                self.msg += ", laylines from table"
+                if not self.polar: return
+
+                if self.config[LAYLINES_FROM_POLAR] or not self.polar.has_angle(upwind):
+                    data.LAY = abs(to180(self.polar.vmc_angle(0, tws, 0 if upwind else 180)))
+                    self.msg += ", laylines from polar"
+                else:
+                    data.LAY = self.polar.angle(tws, upwind)
+                    self.msg += ", laylines from table"
 
             leeway = list(map(float,self.config[LAYLINES_LEEWAY].split(',')))[0 if upwind else 1]
             data.LLS, data.LLP = to360(twd-data.LAY-leeway), to360(twd+data.LAY+leeway) # absolute layline directions incl. leeway
 
-            if self.config[LAYLINES_WITH_CURENT] and data.has('SETF','DFTF','LAY'):
-              stw = self.config[POLAR_FACTOR]*self.polar.value(data.LAY, tws) # STW on layline
-              data.LLS,data.LLSV=add_polar((data.SETF,data.DFTF),(data.LLS,stw)) # stbd layline incl. current
-              data.LLP,data.LLPV=add_polar((data.SETF,data.DFTF),(data.LLP,stw)) # port layline incl. current
-              if to180(twa)>0: data.LLSV=data.SOG # use current speed for current tack
-              else: data.LLPV=data.SOG
+            if self.config[LAYLINES_WITH_CURENT] and data.has('SETF','DFTF','LAY'): # laylines over ground
+              data.LLS,data.LLSV=add_polar((data.SETF,data.DFTF),(data.LLS,data.LLSV)) # stbd layline incl. current
+              data.LLP,data.LLPV=add_polar((data.SETF,data.DFTF),(data.LLP,data.LLPV)) # port layline incl. current
+              self.msg += ", laylines over ground"
+
+            if fixed_laylines: return
 
             data.VPOL = self.config[POLAR_FACTOR]*self.polar.value(twa, tws)
             if data.has("VPOL","STW"):
