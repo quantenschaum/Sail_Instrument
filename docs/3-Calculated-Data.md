@@ -11,10 +11,10 @@ What is calculated by this plugin?
 - true and ground wind - from apparent wind and course data
 - leeway is estimated
 
-How the calculation is done and the formulas used as well definitions of the several quantities, is [documented in the code itself](../Sail_Instrument/plugin.py#L640) and described below.
+How the calculation is done and the formulas used as well definitions of the several quantities, is [documented in the code itself](../plugin.py#L809) and described below.
 
 The values calculated by the plugin are published in AvNav as `gps.sail_instrument.*`.
-Optionally the plugin can [emit NMEA sentences](../Sail_Instrument/plugin.py#L114) to make the computed data available to other devices. If decoding of own NMEA sentences is enabled, these data are fed back into AvNav, get parsed and written to their standard paths in `gps.*`. The plugin does not read the values it has computed to avoid a loop.
+Optionally the plugin can [emit NMEA sentences](../plugin.py#L114) to make the computed data available to other devices. If decoding of own NMEA sentences is enabled, these data are fed back into AvNav, get parsed and written to their standard paths in `gps.*`. The plugin does not read the values it has computed to avoid a loop.
 
 The following values are computed or copied from their sources.
 
@@ -77,13 +77,13 @@ The following values are computed or copied from their sources.
 
 The plugin is able to calculate the [magnetic variation](https://en.wikipedia.org/wiki/Magnetic_declination) at your current position.
 It is using the [World Magnetic Model](https://www.ncei.noaa.gov/products/world-magnetic-model).
-The WMM2020 Coefficient file ([wmm2020.cof](../Sail_Instrument/lib/WMM2020.COF)) valid for 2020 - 2025 is included in the software package. The calculation is done with the [geomag-library](https://github.com/cmweiss/geomag). The coefficient file and the library are located in the [`lib` subdirectory](../Sail_Instrument/lib).
+The WMM2020 Coefficient file ([wmm2020.cof](../lib/WMM2020.COF)) valid for 2020 - 2025 is included in the software package. The calculation is done with the [geomag-library](https://github.com/cmweiss/geomag). The coefficient file and the library are located in the [`lib` subdirectory](../lib).
 
 ## Polar Speed
 
 ![polar charts](Images/polar.png)
 
-You have to provide polar data for your boat in `avnav/user/viewer/polar.json` for the calculation of the laylines, polar speed and optimum VMC course. If there is no such file, the plugin will copy [an example file](../Sail_Instrument/polar.json) to this location, and you can use it as a template for your own polar data.
+You have to provide polar data for your boat in `avnav/user/viewer/polar.json` for the calculation of the laylines, polar speed and optimum VMC course. If there is no such file, the plugin will copy [an example file](../polar.json) to this location, and you can use it as a template for your own polar data.
 
 If you do not have any polar data, you can enter tack and gybe angle in the plugin configuration and use these fixed values instead.
 
@@ -147,7 +147,7 @@ The leeway angle is [estimated from heel and STW](https://opencpn-manuals.github
 
 $$ LEE = LEF \cdot HEL / STW^2 $$
 
-With LEF being a boat specific factor from within (0,20). Heel could be a measured value (either from `signalk.navigation.attitude.roll` or a specific transducer in `gps.transducers.ROLL`). If this data is not available it is interpolated from the heel polar in [`avnav/user/viewer/heel.json`](../Sail_Instrument/heel.json). As the `polar.json` it contains an interpolation table to map TWA/TWS to heel angle HEL.
+With LEF being a boat specific factor from within (0,20). Heel could be a measured value (either from `signalk.navigation.attitude.roll` or a specific transducer in `gps.transducers.ROLL`). ~~If this data is not available it is interpolated from the heel polar in [`avnav/user/viewer/heel.json`](../heel.json). As the `polar.json` it contains an interpolation table to map TWA/TWS to heel angle HEL.~~
 
 ### Speed Vectors
 
