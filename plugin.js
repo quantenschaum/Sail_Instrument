@@ -2242,8 +2242,9 @@
     if (unit == "km") f = 1 / 1000.0;
     if (unit == "nm") f = 1 / 1852.0;
     if (unit == "kn") f = 3600 / 1852.0;
-    if (unit == "km/s") f = 3.6;
+    if (unit == "km/h") f = 3.6;
     if (unit == "hPa") f = 1 / 100.0;
+    if (unit == "C"||unit == "°C") return value - 273.15;
     if (unit == "bft") {
       const v = (value * 3600) / 1852.0;
       if (v <= 1) return 0;
