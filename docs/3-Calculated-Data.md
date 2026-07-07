@@ -32,7 +32,7 @@ The following values are computed or copied from their sources.
 | AWS      | apparent wind speed, measured by anemometer                                   | gps.windSpeed            | MWV     |
 | AWSF     | apparent wind speed smoothed                                                  |                          |         |
 | COG      | course over ground, usually from GPS                                          | gps.track                | RMC,VTG |
-| CRS      | course through water, calculated                                              |                          |         |
+| CTW      | course through water, calculated                                              |                          |         |
 | DBK      | depth below keel                                                              | gps.depthBelowKeel       | DBK     |
 | DBS      | depth below surface                                                           | gps.depthBelowWaterline  | DBS     |
 | DBT      | depth below transducer                                                        | gps.depthBelowTransducer | DBT     |
@@ -50,7 +50,7 @@ The following values are computed or copied from their sources.
 | HEL      | heel angle, measured by sensor or from heel polar TWA/TWS -> HEL              |                          |         |
 | LAT      | Latitude                                                                      | gps.lat                  | RMC,GLL |
 | LAY      | layline angle, rel. to TWD                                                    |                          |         |
-| LEE      | leeway angle, angle between HDT and CRS                                       |                          |         |
+| LEE      | leeway angle, angle between HDT and CTW                                       |                          |         |
 | LEF      | leeway factor                                                                 |                          |         |
 | LON      | Longitude                                                                     | gps.lon                  | RMC,GLL |
 | POLAR    | Polar Speeds Vector                                                           |                          |         |
@@ -139,7 +139,7 @@ $$ d_{mag} = d_{true} - VAR $$
 
 Course through water is simply heading plus leeway angle, this is the direction the boat actually moves through the water.
 
-$$ CRS = HDT + LEE $$
+$$ CTW = HDT + LEE $$
 
 ### Leeway estimation
 
@@ -167,7 +167,7 @@ $$ [D,S]_- = [D_1,S_1] \oplus [D_2,-S_2]  = [D_1,S_1] \oplus [D_2+180°,S_2] $$
 
 The tide or current vector (speed of water over ground) can be estimated as the difference of COG and SOG obtained from GPS and heading from compass + estimated leeway and water speed from the paddle wheel log.
 
-$$ [SET,DFT] = [COG,SOG] \oplus [CRS,-STW] $$
+$$ [SET,DFT] = [COG,SOG] \oplus [CTW,-STW] $$
 
 This equation corresponds to the triangle/parallelogram on the right side of the boat in the sketch above, .
 
