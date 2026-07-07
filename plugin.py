@@ -31,9 +31,16 @@ import sys
 import time
 from math import atan2, copysign, cos, degrees, exp, isfinite, radians, sin, sqrt
 
-import numpy
-import scipy.interpolate
-import scipy.optimize
+hasnumpy = False
+
+try:
+    import numpy
+    import scipy.interpolate
+    import scipy.optimize
+
+    # hasnumpy = True
+except:
+    pass
 
 try:
     from avnav_nmea import NMEAParser
@@ -53,13 +60,12 @@ try:
 except:
     pass
 
-PLUGIN_VERSION = 20241221
+PLUGIN_VERSION = 20260429
 SOURCE = "Sail_Instrument"
 MIN_AVNAV_VERSION = 20230705
 KNOTS = 1.94384  # knots per m/s
 MPS = 1 / KNOTS
-POLAR_FILE = "polar.json"
-HEEL_FILE = "heel.json"
+POLAR_FILE = "polar_file"
 PATH_PREFIX = "gps.sail_instrument."
 SMOOTHING_AW = "smoothing_aw"
 SMOOTHING_TW = "smoothing_tw"
@@ -250,6 +256,12 @@ CONFIG = [
         "type": "FLOAT",
     },
     {
+        "name": POLAR_FILE,
+        "description": "filename of the polar data file in user/viewer folder",
+        "default": "polar.json",
+        "type": "STRING",
+    },
+    {
         "name": WMM_FILE,
         "description": "file with WMM-coefficents for magnetic variation",
         "default": "WMM2025.COF",
@@ -386,14 +398,9 @@ class Plugin(object):
         self.config = config
 
         try:
-            self.polar = Polar(self.get_file(POLAR_FILE))
+            self.polar = Polar(self.get_file(config[POLAR_FILE]))
         except:
             self.polar = None
-
-        try:
-            self.heels = Polar(self.get_file(HEEL_FILE))
-        except:
-            self.heels = None
 
         self.variation_model = None
 
@@ -484,15 +491,15 @@ class Plugin(object):
         data[phi + "F"] = to180(p) if phi[-1] == "A" else p
         data[rad + "F"] = r
 
-        if phi == 'TWD':
-            v = filtered.get('TWDS')
+        if phi == "TWD":
+            v = filtered.get("TWDS")
             if not v or not isfinite(v):
-                filtered['TWDS'] = 0
-            v = filtered['TWDS']
+                filtered["TWDS"] = 0
+            v = filtered["TWDS"]
             delta = data[phi] - data["TWDF"]
             a = self.smoothing_factor(phi)
-            v = filtered['TWDS'] = (1 - a) * v + a * delta**2
-            data['TWDS']=sqrt(v)
+            v = filtered["TWDS"] = (1 - a) * v + a * delta**2
+            data["TWDS"] = sqrt(v)
 
     def run(self):
         self.read_config()
@@ -544,16 +551,6 @@ class Plugin(object):
                                 0,
                             )  # allow to compute TW w/o COG if not moving
                         self.msg += ", manually entered wind"
-
-                if (
-                    data["HEL"] is None
-                    and self.heels
-                    and all(d.has(k) for k in ("TWAF", "TWSF"))
-                ):
-                    data["HEL"] = copysign(
-                        self.heels.value(d["TWAF"], d["TWSF"] * KNOTS), -d["TWAF"]
-                    )
-                    self.msg += ", heel from polar"
 
                 if data["HEL"] is not None:
                     self.msg += ", leeway estimation"
@@ -710,6 +707,10 @@ class Plugin(object):
 
             if fixed_laylines:
                 return
+
+            if not hasnumpy:
+              self.msg += ", numpy/scipy not installed"
+              return
 
             data.VPOL = self.config[POLAR_FACTOR] * self.polar.value(twa, tws)
             if data.has("VPOL", "STW"):
