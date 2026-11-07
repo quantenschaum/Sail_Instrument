@@ -152,7 +152,7 @@
     ctxRef.save();
     align = align.toLowerCase();
     var clockwise = align == "right" ? 1 : -1; // draw clockwise for aligned right. Else Anticlockwise
-    startAngle = startAngle * (Math.PI / 180); // convert to radians
+    startAngle =radians(startAngle)
 
     // calculate height of the font
     var div = document.createElement("div");
@@ -177,7 +177,6 @@
     }
 
     ctxRef.fillStyle = night ? "#a00" : "black";
-    ctxRef.strokeStyle = night ? "black" : "white";
     ctxRef.font = "bold " + fSize + " " + fName;
 
     // Reverse letters for align Left inward, align right outward
@@ -216,14 +215,8 @@
       ctxRef.rotate((charWid / 2 / (diameter / 2 - textHeight)) * clockwise);
       // draw the character at "top" or "bottom"
       // depending on inward or outward facing
-      ctxRef.lineWidth = diameter / 600; //0.03 * 30//radius;
 
       ctxRef.fillText(
-        text[j],
-        0,
-        (inwardFacing ? 1 : -1) * (0 - diameter / 2 + textHeight / 2),
-      );
-      ctxRef.strokeText(
         text[j],
         0,
         (inwardFacing ? 1 : -1) * (0 - diameter / 2 + textHeight / 2),
@@ -702,34 +695,37 @@
     Displaysize: {
       type: "NUMBER",
       default: 100,
+      description: "scale % of the overlay",
     },
     Opacity: {
       type: "NUMBER",
       default: 1,
+      description: "opacity of the overlay",
     },
     Rings: {
       type: "BOOLEAN",
-      default: true,
+      default: false,
+      description: "show compass rings with markers",
     },
     WaterTrack: {
       type: "BOOLEAN",
       default: false,
+      description: "show water track marker",
     },
     HeadingBox: {
       type: "BOOLEAN",
-      default: true,
-    },
-    DisplayData: {
-      type: "BOOLEAN",
       default: false,
-    },
-    DataCircular: {
-      type: "BOOLEAN",
-      default: true,
+      description: "show heading box",
     },
     NightInvert: {
       type: "BOOLEAN",
       default: false,
+      description: "invert colors in night mode",
+    },
+    ApparentWind: {
+      type: "BOOLEAN",
+      default: false,
+      description: "show apparent wind arrow",
     },
   };
 
@@ -789,7 +785,7 @@
       ctx.globalAlpha *= data.Opacity;
       if (data.NightInvert && data.nightMode)
         ctx.filter = "invert(100%) hue-rotate(180deg)";
-      drawWindWidget(ctx, data.Displaysize, degrees(this.getRotation()), data);
+      drawWindWidget(ctx, data.Displaysize, 0, data, -degrees(this.getRotation()));
       ctx.restore();
     },
   };
@@ -805,7 +801,7 @@
   const black = "black";
   const orange = "orange";
 
-  function drawWindWidget(ctx, size, maprotation, data) {
+  function drawWindWidget(ctx, size, maprotation, data, textrotation=0) {
     //        console.log("wind widget",data);
     if (typeof maprotation == "undefined") {
       return;
@@ -855,7 +851,7 @@
         drawLayline(ctx, size, maprotation + data.VMCB, 0, "lightblue");
       }
     }
-    if (knots(data.AWS) >= 1) {
+    if ((data.ApparentWind??true) && knots(data.AWS) >= 1) {
       drawWindArrow(ctx, size, maprotation + data.AWD, blue, "A");
     }
     if (knots(data.TWS) >= 1) {
@@ -911,7 +907,7 @@
       }
     }
     if (displayData) {
-      if (data.DataCircular) displayDataCircle(ctx, size, data);
+      if (data.DataCircular) displayDataCircle(ctx, size, data, textrotation);
       else displayDataCorner(ctx, size, data);
     }
   }
@@ -950,7 +946,7 @@
     if (!val("STW", +1.4, +1.4)) val("SOG", +1.4, +1.4);
   }
 
-  function displayDataCircle(ctx, size, data) {
+  function displayDataCircle(ctx, size, data, rotation) {
     function val(label, size, angle, speed = true, digits = 1) {
       let value = data[label];
       if (typeof value == "number" && isFinite(value)) {
@@ -965,7 +961,7 @@
           0,
           0,
           radius,
-          angle,
+          angle+rotation,
           "center",
           false,
           inward,
@@ -990,10 +986,10 @@
     Sail_Instrument_OverlayParameter,
   );
 
-  function drawPolar(ctx, size, maprotation, data, color) {
+  function drawPolar(ctx, size, angle, data, color) {
     ctx.save();
     ctx.beginPath();
-    ctx.rotate(((maprotation + data.TWD) * Math.PI) / 180);
+    ctx.rotate(((angle + data.TWD) * Math.PI) / 180);
     let r = 0.7 * size;
     //console.log(data.POLAR);
     let v = [];
