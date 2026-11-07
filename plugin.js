@@ -17,7 +17,7 @@
       WP: "nav.wp.position",
       POS: "nav.gps.position",
       TWA: "nav.gps.sail_instrument.TWA",
-      VMC: "nav.gps.sail_instrument.VMC",
+      VMC: "nav.gps.wp.vmg",
       LLS: "nav.gps.sail_instrument.LLS",
       LLP: "nav.gps.sail_instrument.LLP",
       LLSV: "nav.gps.sail_instrument.LLSV",
@@ -46,7 +46,7 @@
       };
     },
     renderHtml: function (data) {
-      //        console.log(data);
+             console.log(data);
       try {
         let stb = to180(data.TWA) > 0;
         let is = calc_intersections(self, data);
@@ -91,7 +91,7 @@
               : data.tack == "opposite"
                 ? time_o
                 : time_t;
-          var val = formatTTG(time);
+          var val = formatHHMM(time);
         }
         if (direct && data.tack == "opposite") val = "---";
       } catch (error) {
@@ -264,7 +264,7 @@
       DBT: "nav.gps.sail_instrument.DBT",
       DBK: "nav.gps.sail_instrument.DBK",
       VMG: "nav.gps.sail_instrument.VMG",
-      VMC: "nav.gps.sail_instrument.VMC",
+      VMC: "nav.gps.wp.vmg",
     },
     translateFunction: (props) => {
       //        console.log(props);
@@ -619,7 +619,7 @@
       SET: "nav.gps.sail_instrument.SETF",
       DFT: "nav.gps.sail_instrument.DFTF",
       VMG: "nav.gps.sail_instrument.VMG",
-      VMC: "nav.gps.sail_instrument.VMC",
+      VMC: "nav.gps.wp.vmg",
       VMCA: "nav.gps.sail_instrument.VMCA",
       VMCB: "nav.gps.sail_instrument.VMCB",
       POLAR: "nav.gps.sail_instrument.POLAR",
@@ -761,7 +761,7 @@
       VMCB: "nav.gps.sail_instrument.VMCB",
       POLAR: "nav.gps.sail_instrument.POLAR",
       VMIN: "nav.gps.sail_instrument.VMIN",
-      VMC: "nav.gps.sail_instrument.VMC",
+      VMC: "nav.gps.wp.vmg",
       VMG: "nav.gps.sail_instrument.VMG",
     },
     initFunction: function () {},
@@ -2264,10 +2264,10 @@
     return value * f;
   }
 
-  function formatHHMM(value, seconds = false, utc = false) {
+  function formatTime(value, seconds = false, utc = false) {
     value = parseInt(value);
     if (!isFinite(value)) return "--:--" + (seconds ? ":--" : "");
-    const d = new Date(value);
+    const d = new Date(value*1000);
     let hms = utc
       ? [d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()]
       : [d.getHours(), d.getMinutes(), d.getSeconds()];
@@ -2275,7 +2275,7 @@
     return hms.map((v) => pad(v, 2)).join(":");
   }
 
-  function formatTTG(value, seconds) {
+  function formatHHMM(value, seconds) {
     value = parseInt(value);
     if (!isFinite(value) || value < 0) return "--:--" + (seconds ? ":--" : "");
     const SEC = Math.round(Math.abs(value));
@@ -2291,10 +2291,9 @@
   function formatValue(value, opts) {
     if (opts.format == "180") value = to180(value);
     if (opts.format == "360") value = to360(value);
-    if (opts.format == "HH:MM")
-      return formatHHMM(value, opts.digits >= 6, opts.utc);
-    else if (opts.format == "TTG") return formatTTG(value, opts.digits >= 6);
-    else if (opts.format.startsWith("D")) return formatPos(value, opts.format);
+    if (opts.format == "time") return formatTime(value, opts.digits >= 6, opts.utc);
+    if (opts.format == "HH:MM") return formatHHMM(value, opts.digits >= 6);
+    if (opts.format.startsWith("D")) return formatPos(value, opts.format);
     return formatFloat(
       value,
       opts.digits,
@@ -2317,12 +2316,10 @@
     formatter: avnav.api.formatter.formatString,
     renderHtml: function (data) {
       let value = data.value;
-      if (data.format == "TTG") value = (value - data.TIME) / 1000;
-      if (value instanceof Date) value = value.getTime();
+      if (value instanceof Date) value = Math.round(value.getTime() / 1000); // as unix seconds
       if (data.format.startsWith("D"))
         value = { lat: data.LAT, lon: data.LON, ...data.value };
       else value = convertTo(value, data.unit);
-      // console.log(data.caption, data.value, typeof data.value, value);
       let str = formatValue(value, data)
         .replaceAll(":", "\uA789") // modified colon
         .replaceAll("-", "\u2012") // figure dash
@@ -2334,6 +2331,7 @@
       if (data.format == "0.00") {
         cls += value < data.lower || value > data.upper ? " warning" : "";
       }
+      // console.log(data.caption,data.unit, data.value,`(${value})`,'>',str);
       return `<div class="widgetData ${cls}">${str}</div>`;
     },
   };
@@ -2343,7 +2341,7 @@
     formatter: false,
     format: {
       type: "SELECT",
-      list: ["0.00", "180", "360", "HH:MM", "TTG", "DD", "DDM", "DMS"],
+      list: ["0.00", "180", "360", "HH:MM", "time", "DD", "DDM", "DMS"],
       default: "0.00",
     },
     digits: {

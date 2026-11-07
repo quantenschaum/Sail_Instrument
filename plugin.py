@@ -658,7 +658,7 @@ class Plugin(object):
             gybe_angle = self.config[GYBE_ANGLE]
             assert 0 <= gybe_angle < 180
 
-            data.VMCA, data.VMCB = -1, -1
+            # data.VMCA, data.VMCB = -1, -1
             # data.VPOL, data.POLAR = 0, 0
 
             data.LLSV = data.LLPV = data.STWF  # velocities on laylines
