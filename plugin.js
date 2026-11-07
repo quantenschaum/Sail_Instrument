@@ -46,7 +46,7 @@
       };
     },
     renderHtml: function (data) {
-             console.log(data);
+      // console.log(data);
       try {
         let stb = to180(data.TWA) > 0;
         let is = calc_intersections(self, data);
@@ -81,8 +81,7 @@
                 ? dist_o
                 : dist_t;
           var val = avnav.api.formatter.formatDistance(
-            dist,
-            data.formatterParameters,
+            dist,...data.formatterParameters,
           );
         } else {
           var time =
