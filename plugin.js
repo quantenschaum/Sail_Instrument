@@ -669,18 +669,22 @@
     WaterTrack: {
       type: "BOOLEAN",
       default: false,
+      description: "show water track marker",
     },
     HeadingBox: {
       type: "BOOLEAN",
       default: true,
+      description: "show heading box",
     },
     DisplayData: {
       type: "BOOLEAN",
       default: true,
+      description: "show data in corners",
     },
     DataCircular: {
       type: "BOOLEAN",
       default: false,
+      description: "show data on circle",
     },
   });
 
