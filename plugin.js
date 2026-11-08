@@ -17,7 +17,7 @@
       WP: "nav.wp.position",
       POS: "nav.gps.position",
       TWA: "nav.gps.sail_instrument.TWA",
-      VMC: "nav.gps.wp.vmg",
+      VMC: "nav.gps.sail_instrument.VMC",
       LLS: "nav.gps.sail_instrument.LLS",
       LLP: "nav.gps.sail_instrument.LLP",
       LLSV: "nav.gps.sail_instrument.LLSV",
@@ -47,6 +47,7 @@
     },
     renderHtml: function (data) {
       // console.log(data);
+      let val;
       try {
         let stb = to180(data.TWA) > 0;
         let is = calc_intersections(self, data);
@@ -59,7 +60,7 @@
           var dist_c = POS.rhumbDistanceTo(WP);
           var dist_o = dist_c;
           var dist_t = dist_c;
-          var time_c = data.VMC > 0 ? dist_c / data.VMC : NaN;
+          var time_c = dist_c / data.VMC;
           var time_o = time_c;
           var time_t = time_c;
         } else {
@@ -73,6 +74,8 @@
           var time_t = time_c + time_o;
         }
 
+        if (data.VMC < 0) time_c = time_o = time_t = NaN;
+
         if (data.type == "distance") {
           var dist =
             data.tack == "current"
@@ -80,7 +83,7 @@
               : data.tack == "opposite"
                 ? dist_o
                 : dist_t;
-          var val = avnav.api.formatter.formatDistance(
+          val = avnav.api.formatter.formatDistance(
             dist,...data.formatterParameters,
           );
         } else {
@@ -90,11 +93,11 @@
               : data.tack == "opposite"
                 ? time_o
                 : time_t;
-          var val = formatHHMM(time);
+          val = formatHHMM(time);
         }
         if (direct && data.tack == "opposite") val = "---";
       } catch (error) {
-        var val = "---";
+        val = "---";
       }
       return (
         '<div class="widgetData"><span class="valueData">' +
@@ -263,7 +266,7 @@
       DBT: "nav.gps.sail_instrument.DBT",
       DBK: "nav.gps.sail_instrument.DBK",
       VMG: "nav.gps.sail_instrument.VMG",
-      VMC: "nav.gps.wp.vmg",
+      VMC: "nav.gps.sail_instrument.VMC",
     },
     translateFunction: (props) => {
       //        console.log(props);
@@ -302,12 +305,14 @@
 
       let ctx = canvas.getContext("2d");
       ctx.save();
-      canvas.style.height = "99%";
+      canvas.style.height = "100%";
+      canvas.style.width = "100%";
+      canvas.style.aspectRatio = 1/data.aspect;
       let bcr = canvas.getBoundingClientRect();
-      let w = bcr.width,
-        h = bcr.height;
+      let w = bcr.width;
+      let h = bcr.height;
       if (w < 150) {
-        canvas.style.height = "";
+        canvas.style.height = null;
         h = w * data.aspect;
       }
       canvas.width = w;
@@ -618,7 +623,7 @@
       SET: "nav.gps.sail_instrument.SETF",
       DFT: "nav.gps.sail_instrument.DFTF",
       VMG: "nav.gps.sail_instrument.VMG",
-      VMC: "nav.gps.wp.vmg",
+      VMC: "nav.gps.sail_instrument.VMC",
       VMCA: "nav.gps.sail_instrument.VMCA",
       VMCB: "nav.gps.sail_instrument.VMCB",
       POLAR: "nav.gps.sail_instrument.POLAR",
@@ -631,9 +636,12 @@
       var ctx = canvas.getContext("2d");
       ctx.save();
       // Set scale factor for all values
+      canvas.style.height = "100%";
+      canvas.style.width = "100%";
+      canvas.style.aspectRatio = 1;
       var bcr = canvas.getBoundingClientRect();
-      var w = bcr.width,
-        h = bcr.height;
+      var w = bcr.width;
+      var h = bcr.height;
       canvas.width = w;
       canvas.height = h;
       var size = 300;
@@ -760,7 +768,7 @@
       VMCB: "nav.gps.sail_instrument.VMCB",
       POLAR: "nav.gps.sail_instrument.POLAR",
       VMIN: "nav.gps.sail_instrument.VMIN",
-      VMC: "nav.gps.wp.vmg",
+      VMC: "nav.gps.sail_instrument.VMC",
       VMG: "nav.gps.sail_instrument.VMG",
     },
     initFunction: function () {},
@@ -1540,11 +1548,12 @@
     renderCanvas: function (canvas, data) {
       //      console.log(data);
       canvas.style.height = "100%";
+      canvas.style.width = "100%";
       const ctx = canvas.getContext("2d");
       const bcr = canvas.getBoundingClientRect();
       //      console.log(bcr);
-      const w = bcr.width,
-        h = bcr.height;
+      const w = bcr.width;
+      const h = bcr.height;
       canvas.width = w;
       canvas.height = h;
 
@@ -1791,7 +1800,7 @@
     altTicks: { type: "BOOLEAN", default: false },
     letters: { type: "BOOLEAN", default: true },
     bearing: { type: "BOOLEAN", default: true },
-    magnetic: { type: "BOOLEAN", default: false },
+    magnetic: { type: "BOOLEAN", default: false, description: "convert bearing to magnetic" },
   });
 
   var RoundCompassWidget = {
@@ -1804,9 +1813,10 @@
     finalizeFunction: function () {},
     renderCanvas: function (canvas, data) {
       canvas.style.height = "100%";
+      canvas.style.width = "100%";
       animate(canvas, data, (ctx, course) => {
-        const w = canvas.width,
-          h = canvas.height;
+        const w = canvas.width;
+        const h = canvas.height;
         const color1 = data.nightMode ? "#d00" : "black";
         const color2 = data.nightMode ? "#66f" : "#d00";
         const half = data.half || h < 300 || h / w < 0.5;
@@ -1904,7 +1914,7 @@
     altTicks: { type: "BOOLEAN", default: false },
     letters: { type: "BOOLEAN", default: true },
     bearing: { type: "BOOLEAN", default: true },
-    magnetic: { type: "BOOLEAN", default: false },
+    magnetic: { type: "BOOLEAN", default: false, description: "convert bearing to magnetic" },
   });
 
   var RoundCompass2Widget = {
@@ -2036,7 +2046,7 @@
     showValue: { type: "BOOLEAN", default: false },
     half: { type: "BOOLEAN", default: false },
     bearing: { type: "BOOLEAN", default: true },
-    magnetic: { type: "BOOLEAN", default: false },
+    magnetic: { type: "BOOLEAN", default: false, description: "convert bearing to magnetic" },
   });
 
   var SVGCompass = {
@@ -2067,8 +2077,8 @@
       canvas.div = canvas.parentElement;
       //      console.log('div',canvas.div);
       const bbox = canvas.div.getBoundingClientRect();
-      const w = bbox.width,
-        h = bbox.height;
+      const w = bbox.width;
+      const h = bbox.height;
       const half = data.half || h < w / 2;
       const a = Math.min(w, half ? 2 * h : h);
       // console.log(a);

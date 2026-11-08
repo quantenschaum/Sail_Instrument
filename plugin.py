@@ -124,6 +124,7 @@ INPUT_FIELDS = {
     "DBS": "gps.depthBelowWaterline",
     "DBT": "gps.depthBelowTransducer",
     "DBK": "gps.depthBelowKeel",
+    "BRG": "gps.wp.course",
 }
 
 NMEA_SENTENCES = {
@@ -480,9 +481,9 @@ class Plugin(object):
         k = phi + rad
         p, r = data[phi], data[rad]
         w = toCart((p, r))
+        a = self.smoothing_factor(phi)
         if k in filtered and all(map(isfinite, filtered[k])):
-            a = self.smoothing_factor(phi)
-            assert 0 < a <= 1
+            assert 0 <= a <= 1
             v = filtered[k]
             filtered[k] = [(1 - a) * v[i] + a * w[i] for i in (0, 1)]
         else:
@@ -596,7 +597,7 @@ class Plugin(object):
                 #     if data.misses(k): data[k] = -1 # explicitly mark as undefined, workaround for https://github.com/wellenvogel/avnav/issues/347
 
                 for k in data.keys():
-                    # print(f"{PATH_PREFIX + k}={data[k]}")
+                    # print(f"{k:4} {data[k]:8.3f}")
                     self.writeValue(data, k, PATH_PREFIX + k)
 
                 sending = set()
@@ -739,15 +740,12 @@ class Plugin(object):
 def bearing_to_waypoint():
     try:
         router = AVNWorker.findHandlerByName(AVNRouter.getConfigName())
-        if router is None:
-            return
+        if router is None: return
         wpData = router.getWpData()
-        if wpData is None:
-            return
-        if not wpData.validData:
-            return
+        if wpData is None or not wpData.validData: return
         return wpData.dstBearing
-    except:
+    except Exception as x:
+        # print(x)
         return
 
 
