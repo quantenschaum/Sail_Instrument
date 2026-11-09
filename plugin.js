@@ -2166,6 +2166,7 @@
     trailingDot = true,
     overflow = "#",
     positiveSign = " ",
+    absolute = false,
   ) {
     if (!digits) digits = 3;
     let signed = digits < 0;
@@ -2179,6 +2180,7 @@
         "-".repeat((signed ? 1 : 0) + digits - maxFrac) +
         (maxFrac ? "." + "-".repeat(maxFrac) : "")
       );
+    if (absolute) number = Math.abs(number);
     if (digits == 0) return number.toFixed(0);
     if (number < 0 && !signed) digits -= 1; // make room for unexpected sign
     let sign = number < 0 ? "-" : signed ? positiveSign || " " : "";
@@ -2186,7 +2188,7 @@
     let decPlaces = digits - 1 - Math.floor(Math.log10(number));
     decPlaces = fixed ? maxFrac : clamp(0, decPlaces, maxFrac);
     let str = number.toFixed(decPlaces);
-    let n = digits + (str.includes(".") ? 1 : 0); // expected length of string w/o sign
+    let n = digits + (str.includes(".") ? 1 : 0); // expected length of string
     if (overflow && str.length > n)
       return (
         overflow.repeat((signed ? 1 : 0) + digits) +
@@ -2240,6 +2242,12 @@
       default: " ",
       description:
         "sign to show for numbers>0 if digits<0 (set to + to show positive sign)",
+    },
+    {
+      name: "absolute",
+      type: "BOOLEAN",
+      default: false,
+      description: "absolute value, remove sign",
     },
   ];
   avnav.api.registerFormatter("0float", formatFloat);
@@ -2310,8 +2318,9 @@
       opts.maxfrac,
       opts.zeroes,
       true,
-      "#",
-      opts.signed ? "+" : " ",
+      opts.overflow ? null : '#',
+      opts.posSign ? "+" : " ",
+      opts.abs,
     );
   }
 
@@ -2333,8 +2342,9 @@
       let str = formatValue(value, data)
         .replaceAll(":", "\uA789") // modified colon
         .replaceAll("-", "\u2012") // figure dash
-        .replaceAll(" ", "\u2007") // figure space
-        .replace(/\.$/, "\u2008"); // punctuation space
+        .replaceAll(" ", "\u2007"); // figure space
+        // .replace(/\.$/, "\u2008"); // punctuation space
+      if (str.endsWith('.')) str = "\u2008" + str.slice(0, -1);
       let cls = str.length > 8 ? "small" : str.length > 6 ? "medium" : "big";
       cls += data.format.startsWith("D") ? " mono" : "";
       if (data.validity && !data.VALID) cls += " error invalid";
@@ -2343,17 +2353,19 @@
       }
       // console.log(data.caption,data.unit, data.value,`(${value})`,'>',str);
       let style = '';
-      if(data.rgscale && Math.isFinite(value)) {
-        let p = 100 * value / data.rgscale;
-        let a = Math.min(50,50+p/2);
-        let b = Math.max(50,50+p/2);
-        let c = value>0 ? 'seagreen' : 'crimson';
-        style = `background: linear-gradient(90deg, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
-      }
-      if (data.bar && Math.isFinite(value)) {
-        let p = 100 * (value-data.lower) / (data.upper-data.lower);
-        let c = data.barColor;
-        style = `background: linear-gradient(90deg, ${c} ${p}%, transparent ${p}%);`;
+      if (data.bar && isFinite(value)) {
+        if (data.symmetric) {
+          let p = 100 * (value - data.lower) / (data.upper - data.lower);
+          let a = Math.min(50, p);
+          let b = Math.max(50, p);
+          let c = p > 50 ? 'lightgreen' : 'coral';
+          style = `background: linear-gradient(to right, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
+        } else {
+          let p = 100 * (value - data.lower) / (data.upper - data.lower);
+          let c = data.barColor;
+          let d = data.upper > data.lower ? 'to right' : 'to left';
+          style = `background: linear-gradient(${d}, ${c} ${p}%, transparent ${p}%);`;
+        }
       }
       if (data.percent) str += '%';
       return `<div class="widgetData ${cls}" style="${style}">${str}</div>`;
@@ -2384,10 +2396,20 @@
       default: false,
       description: "leading zeroes",
     },
-    signed: {
+    posSign: {
       type: "BOOLEAN",
       default: false,
       description: "show positive sign +",
+    },
+    abs: {
+      type: "BOOLEAN",
+      default: false,
+      description: "show absolute value (remove sign)",
+    },
+    overflow: {
+      type: "BOOLEAN",
+      default: false,
+      description: "allow overflow",
     },
     utc: {
       type: "BOOLEAN",
@@ -2414,15 +2436,15 @@
       default: false,
       description: "visualize value relative to thresholds as color bar",
     },
+    symmetric: {
+      type: "BOOLEAN",
+      default: false,
+      description: "color bar symmetric around center in R/G colors",
+    },
     barColor: {
       type: "COLOR",
       default: "lightblue",
       description: "color of bar",
-    },
-    rgscale: {
-      type: "FLOAT",
-      default: 0,
-      description: "scale factor for R/G background coloring",
     },
     validity: {
       type: "BOOLEAN",
