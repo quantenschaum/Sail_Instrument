@@ -2356,12 +2356,12 @@
       if (data.bar && isFinite(value)) {
         if (data.symmetric) {
           let p = 100 * (value - data.lower) / (data.upper - data.lower);
-          let a = Math.min(50, p);
-          let b = Math.max(50, p);
+          let a = clamp(0, p, 50);
+          let b = clamp(50, p, 100);
           let c = p > 50 ? 'lightgreen' : 'coral';
           style = `background: linear-gradient(to right, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
         } else {
-          let p = 100 * (value - data.lower) / (data.upper - data.lower);
+          let p = clamp(0,100 * (value - data.lower) / (data.upper - data.lower),100);
           let c = data.barColor;
           let d = data.upper > data.lower ? 'to right' : 'to left';
           style = `background: linear-gradient(${d}, ${c} ${p}%, transparent ${p}%);`;
