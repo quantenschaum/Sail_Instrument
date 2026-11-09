@@ -2343,14 +2343,14 @@
       }
       // console.log(data.caption,data.unit, data.value,`(${value})`,'>',str);
       let style = '';
-      if(data.rgscale) {
+      if(data.rgscale && Math.isFinite(value)) {
         let p = 100 * value / data.rgscale;
         let a = Math.min(50,50+p/2);
         let b = Math.max(50,50+p/2);
         let c = value>0 ? 'seagreen' : 'crimson';
         style = `background: linear-gradient(90deg, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
       }
-      if (data.bar) {
+      if (data.bar && Math.isFinite(value)) {
         let p = 100 * (value-data.lower) / (data.upper-data.lower);
         let c = data.barColor;
         style = `background: linear-gradient(90deg, ${c} ${p}%, transparent ${p}%);`;
