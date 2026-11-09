@@ -2303,6 +2303,7 @@
     if (opts.format == "time") return formatTime(value, opts.digits >= 6, opts.utc);
     if (opts.format == "HH:MM") return formatHHMM(value, opts.digits >= 6);
     if (opts.format.startsWith("D")) return formatPos(value, opts.format);
+    if (opts.percent) value = 100 * (value-opts.lower) / (opts.upper-opts.lower);
     return formatFloat(
       value,
       opts.digits,
@@ -2354,6 +2355,7 @@
         let c = data.barColor;
         style = `background: linear-gradient(90deg, ${c} ${p}%, transparent ${p}%);`;
       }
+      if (data.percent) str += '%';
       return `<div class="widgetData ${cls}" style="${style}">${str}</div>`;
     },
   };
@@ -2363,7 +2365,7 @@
     formatter: false,
     format: {
       type: "SELECT",
-      list: ["0.00", "180", "360", "HH:MM", "time", "DD", "DDM", "DMS"],
+      list: ["0.00", "180", "360", "HH:MM", "time", "DD", "DDM", "DMS", "%"],
       default: "0.00",
     },
     digits: {
@@ -2401,6 +2403,11 @@
       type: "FLOAT",
       default: +99999,
       description: "upper warning threshold",
+    },
+    percent: {
+      type: "BOOLEAN",
+      default: false,
+      description: "show value as percent of thresholds",
     },
     bar: {
       type: "BOOLEAN",
