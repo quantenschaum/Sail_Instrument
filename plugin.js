@@ -2341,7 +2341,20 @@
         cls += value < data.lower || value > data.upper ? " warning" : "";
       }
       // console.log(data.caption,data.unit, data.value,`(${value})`,'>',str);
-      return `<div class="widgetData ${cls}">${str}</div>`;
+      let style = '';
+      if(data.rgscale) {
+        let p = 100 * value / data.rgscale;
+        let a = Math.min(50,50+p/2);
+        let b = Math.max(50,50+p/2);
+        let c = value>0 ? 'seagreen' : 'crimson';
+        style = `background: linear-gradient(90deg, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
+      }
+      if (data.bar) {
+        let p = 100 * (value-data.lower) / (data.upper-data.lower);
+        let c = data.barColor;
+        style = `background: linear-gradient(90deg, ${c} ${p}%, transparent ${p}%);`;
+      }
+      return `<div class="widgetData ${cls}" style="${style}">${str}</div>`;
     },
   };
 
@@ -2379,15 +2392,30 @@
       default: false,
       description: "time in UTC",
     },
+    lower: {
+      type: "FLOAT",
+      default: -99999,
+      description: "lower warning threshold",
+    },
     upper: {
       type: "FLOAT",
       default: +99999,
       description: "upper warning threshold",
     },
-    lower: {
+    bar: {
+      type: "BOOLEAN",
+      default: false,
+      description: "visualize value relative to thresholds as color bar",
+    },
+    barColor: {
+      type: "COLOR",
+      default: "lightblue",
+      description: "color of bar",
+    },
+    rgscale: {
       type: "FLOAT",
-      default: -99999,
-      description: "lower warning threshold",
+      default: 0,
+      description: "scale factor for R/G background coloring",
     },
     validity: {
       type: "BOOLEAN",
