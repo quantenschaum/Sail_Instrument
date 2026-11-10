@@ -29,7 +29,7 @@ import re
 import shutil
 import sys
 import time
-from math import atan2, copysign, cos, degrees, exp, isfinite, radians, sin, sqrt
+from math import atan2, copysign, cos, degrees, expm1, isfinite, radians, sin, sqrt
 
 hasnumpy = False
 
@@ -470,7 +470,7 @@ class Plugin(object):
         ]
         if tau <= 0:
             return 1
-        return 1 - exp(-dt / tau)
+        return -expm1(-dt / tau)
 
     def smooth(self, data, phi, rad):
         if not hasattr(self, "filtered"):
