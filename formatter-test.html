@@ -1,0 +1,174 @@
+<!doctype html>
+<head>
+  <title>formatFloat</title>
+  <style>
+    body {
+      /*font-family: 'roboto mono','Courier New', Courier, monospace;*/
+      font-family:
+        roboto mono,
+        roboto,
+        droid sans,
+        open sans,
+        arial,
+        verdana,
+        sans-serif;
+      font-variant-numeric: tabular-nums slashed-zero;
+    }
+    tr:nth-child(even) {
+      background-color: lightyellow;
+    }
+    td {
+      text-align: center;
+    }
+    tr.longer {
+      background: lightpink;
+    }
+    tr.shorter {
+      background: lightcyan;
+    }
+  </style>
+</head>
+<body id="body">
+  <script>
+    const clamp = (lower, x, upper) => Math.max(lower, Math.min(upper, x));
+
+    const formatFloat = function (
+      number,
+      digits,
+      maxFrac,
+      leadingZeroes = false,
+      trailingDot = true,
+      overflow = "#",
+      positiveSign = "+",
+    ) {
+      if (!digits) digits = 3;
+      let signed = digits < 0;
+      digits = Math.abs(digits);
+      if (maxFrac == null) maxFrac = digits - 1;
+      const fixed = maxFrac < 0;
+      maxFrac = clamp(0, Math.abs(maxFrac), digits - 1);
+      number = parseFloat(number); // null-->NaN
+      if (!isFinite(number))
+        return (
+          "-".repeat((signed ? 1 : 0) + digits - maxFrac) +
+          (maxFrac ? "." + "-".repeat(maxFrac) : "")
+        );
+      if (digits == 0) return number.toFixed(0);
+      if (number < 0 && !signed) digits -= 1; // make room for unexpected sign
+      let sign = number < 0 ? "-" : signed ? positiveSign : "";
+      number = Math.abs(number);
+      let decPlaces = digits - 1 - Math.floor(Math.log10(number));
+      decPlaces = fixed ? maxFrac : clamp(0, decPlaces, maxFrac);
+      let str = number.toFixed(decPlaces);
+      let n = digits + (str.includes(".") ? 1 : 0); // expected length of string w/o sign
+      if (overflow && str.length > n)
+        return (
+          overflow.repeat((signed ? 1 : 0) + digits) +
+          (trailingDot && maxFrac ? "." : "")
+        );
+      let dot = trailingDot && maxFrac && !str.includes(".") ? "." : "";
+      if (leadingZeroes) {
+        return sign + str.padStart(n, "0") + dot; // -001.23
+      } else {
+        return (sign + str).padStart(n + sign.length, " ") + dot; // __-1.23
+      }
+    };
+
+    const formatDecimal = function (number, fix, fract, addSpace, prefixZero) {
+      return formatFloat(
+        number,
+        (addSpace ? -1 : 1) * (fix + fract),
+        -fract,
+        prefixZero,
+      );
+    };
+
+    const values = [
+      0,
+      // -0,
+      1,
+      0.1,
+      0.001,
+      0.0001,
+      1,
+      10,
+      100,
+      1000,
+      Math.E,
+      Math.PI,
+      1e-9,
+      1e-12,
+      1e6,
+      1e9,
+      0.12345678,
+      1.2345678,
+      12.345678,
+      123.45678,
+      1234.5678,
+      12345.678,
+      123456.78,
+      1234567.8,
+      12345678,
+      "6.543",
+      undefined,
+      null,
+      NaN,
+      Infinity,
+      -Infinity,
+    ];
+
+    const tab = document.createElement("table");
+    body.append(tab);
+    let tr = document.createElement("tr");
+    tab.append(tr);
+    tr.innerHTML =
+      "<td>" +
+      ["value", "digits", "maxFrac", "lz", "output"].join("</td><td>") +
+      "</td>";
+
+    for (const l of [0, 1]) {
+      for (const v of values) {
+        for (let d = -5; d < 6; d++) {
+          for (let f = -Math.abs(d) + 1; f < Math.abs(d); f++) {
+            if (Math.abs(f) > Math.abs(d) - 1) continue;
+            let o;
+            try {
+              o = formatFloat(v, d, f, l)
+                .replaceAll(" ", "_") // visualize spaces
+                .replaceAll("-", "\u2012") // figure dash
+                .replaceAll(" ", "\u2007") // figure space
+                .replace(/\.$/, "\u2008"); // punctuation space
+            } catch (err) {
+              o = `!Error: ${err.message || err}`;
+            }
+            console.log(v, d, f, l, o);
+            let n =
+              (Math.abs(d) || 3) +
+              (clamp(0, Math.abs(f), (Math.abs(d) || 3) - 1) ? 1 : 0) +
+              (d < 0 ? 1 : 0);
+            // if (o.length == n) continue;
+            tr = document.createElement("tr");
+            tr.classList.add(
+              o.length > n ? "longer" : o.length < n ? "shorter" : "ok",
+            );
+            tab.append(tr);
+            tr.innerHTML =
+              "<td>" +
+              [
+                v === undefined ? "undefined" : v == null ? "null" : v,
+                d,
+                f,
+                l,
+                o,
+                // Math.abs(d) || 3,
+                // clamp(0, Math.abs(f), Math.abs(d) - 1) ? 1 : 0,
+                // d < 0 ? 1 : 0,
+                // n,
+              ].join("</td><td>") +
+              "</td>";
+          }
+        }
+      }
+    }
+  </script>
+</body>

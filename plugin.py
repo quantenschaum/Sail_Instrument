@@ -38,7 +38,7 @@ try:
     import scipy.interpolate
     import scipy.optimize
 
-    # hasnumpy = True
+    hasnumpy = True
 except:
     pass
 
@@ -51,18 +51,21 @@ except:
 
 hasgeomag = False
 
+# https://www.ncei.noaa.gov/products/world-magnetic-model
 try:
-    # https://www.ncei.noaa.gov/products/world-magnetic-model
-    sys.path.insert(0, os.path.dirname(__file__) + "/lib")
     import geomag
-
     hasgeomag = True
 except:
-    pass
+    try:
+        sys.path.insert(0, os.path.dirname(__file__) + "/lib")
+        import geomag
+        hasgeomag = True
+    except:
+        pass
 
-PLUGIN_VERSION = 20260429
+PLUGIN_VERSION = 202621110
 SOURCE = "Sail_Instrument"
-MIN_AVNAV_VERSION = 20230705
+MIN_AVNAV_VERSION = 20261102
 KNOTS = 1.94384  # knots per m/s
 MPS = 1 / KNOTS
 POLAR_FILE = "polar_file"
@@ -710,8 +713,8 @@ class Plugin(object):
                 return
 
             if not hasnumpy:
-              self.msg += ", numpy/scipy not installed"
-              return
+                self.msg += ", numpy/scipy not available"
+                return
 
             data.VPOL = self.config[POLAR_FACTOR] * self.polar.value(twa, tws)
             if data.has("VPOL", "STW"):
@@ -740,9 +743,11 @@ class Plugin(object):
 def bearing_to_waypoint():
     try:
         router = AVNWorker.findHandlerByName(AVNRouter.getConfigName())
-        if router is None: return
+        if router is None:
+            return
         wpData = router.getWpData()
-        if wpData is None or not wpData.validData: return
+        if wpData is None or not wpData.validData:
+            return
         return wpData.dstBearing
     except Exception as x:
         # print(x)
@@ -771,7 +776,7 @@ class Polar:
         """
 
         if not self.spl:
-            val = "STW" if "STW" in self.data else "heel"
+            val = "STW"
             try:
                 interp2d = scipy.interpolate.RectBivariateSpline
                 kw = {"kx": 1, "ky": min(1, len(self.data["TWS"]) - 1)}
