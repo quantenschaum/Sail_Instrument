@@ -1,5 +1,15 @@
-(function () {
-  console.log("SailInstrument");
+export default async (api) => {
+  const devmode =
+    new URLSearchParams(window.location.search).get("noCloseDialog") == "true";
+  function log(...a) {
+    if (!devmode) return;
+    console.log(
+      "%cSI",
+      "background: green; color: white; padding: 2px 4px; border-radius: 3px;",
+      ...a,
+    );
+  }
+  log("start", api);
 
   function toDateTime(secs) {
     let t = new Date(1970, 0, 1); // Epoch
@@ -23,7 +33,7 @@
       LLSV: "nav.gps.sail_instrument.LLSV",
       LLPV: "nav.gps.sail_instrument.LLPV",
     },
-    formatter: avnav.api.formatter.formatDistance,
+    formatter: api.formatter.formatDistance,
     formatterParameters: ["nm"],
     translateFunction: (props) => {
       let suffix = "";
@@ -83,9 +93,7 @@
               : data.tack == "opposite"
                 ? dist_o
                 : dist_t;
-          val = avnav.api.formatter.formatDistance(
-            dist,...data.formatterParameters,
-          );
+          val = api.formatter.formatDistance(dist, ...data.formatterParameters);
         } else {
           var time =
             data.tack == "current"
@@ -107,7 +115,7 @@
     },
   };
 
-  avnav.api.registerWidget(LaylineWidget, {
+  api.registerWidget(LaylineWidget, {
     formatterParameters: true,
     caption: false,
     unit: false,
@@ -154,7 +162,7 @@
     ctxRef.save();
     align = align.toLowerCase();
     var clockwise = align == "right" ? 1 : -1; // draw clockwise for aligned right. Else Anticlockwise
-    startAngle =radians(startAngle)
+    startAngle = radians(startAngle);
 
     // calculate height of the font
     var div = document.createElement("div");
@@ -307,7 +315,7 @@
       ctx.save();
       canvas.style.height = "100%";
       canvas.style.width = "100%";
-      canvas.style.aspectRatio = 1/data.aspect;
+      canvas.style.aspectRatio = 1 / data.aspect;
       let bcr = canvas.getBoundingClientRect();
       let w = bcr.width;
       let h = bcr.height;
@@ -329,7 +337,7 @@
         window.windplothist = hist = new Map();
       }
       hist.set(time, data);
-      for (k of hist.keys()) {
+      for (const k of hist.keys()) {
         let t = Math.max(0, time - k) / 1000;
         if (t > 3600) {
           hist.delete(k);
@@ -517,7 +525,7 @@
         let p = [Number.NaN, 0];
         let c = "";
         ctx.beginPath();
-        for (k of hist.keys()) {
+        for (const k of hist.keys()) {
           let t = Math.max(0, time - k) / 1000;
           if (t > tmax) {
             continue;
@@ -561,7 +569,7 @@
     },
   };
 
-  avnav.api.registerWidget(HistoryPlotWidget, {
+  api.registerWidget(HistoryPlotWidget, {
     caption: false,
     unit: false,
     quantity: {
@@ -672,7 +680,7 @@
     },
   };
 
-  avnav.api.registerWidget(SailInstrumentWidget, {
+  api.registerWidget(SailInstrumentWidget, {
     WaterTrack: {
       type: "BOOLEAN",
       default: false,
@@ -773,30 +781,35 @@
     },
     initFunction: function () {},
     finalizeFunction: function () {},
-    renderCanvas: function (canvas, data, center) {
-      //        console.log(data);
-      let ctx = canvas.getContext("2d");
+    renderCanvas: function (canvas, data, map) {
+      //        log(data);
+      const s = map.getScale();
+      const [w, h] = map.getDimensions();
+
+      const ctx = map.getContext();
       ctx.save();
 
       if (data.Widgetposition == "Mapcenter") {
-        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.translate(w / 2, h / 2);
       } else if (data.Widgetposition == "Boatposition") {
-        if (
-          typeof data.POS != "undefined" &&
-          data.POS.lat != 0 &&
-          data.POS.lon != 0
-        ) {
-          coordinates = this.lonLatToPixel(data.POS.lon, data.POS.lat);
-          ctx.translate(coordinates[0], coordinates[1]);
-        } else {
+        if (data.POS == null || (data.POS.lon == 0 && data.POS.lat == 0))
           return;
-        }
+        const [tx, ty] = this.lonLatToPixel(data.POS.lon, data.POS.lat);
+        ctx.translate(tx, ty);
       }
+
+      ctx.scale(s, s);
 
       ctx.globalAlpha *= data.Opacity;
       if (data.NightInvert && data.nightMode)
         ctx.filter = "invert(100%) hue-rotate(180deg)";
-      drawWindWidget(ctx, data.Displaysize, 0, data, -degrees(this.getRotation()));
+      drawWindWidget(
+        ctx,
+        data.Displaysize,
+        0,
+        data,
+        -degrees(this.getRotation()),
+      );
       ctx.restore();
     },
   };
@@ -812,7 +825,7 @@
   const black = "black";
   const orange = "orange";
 
-  function drawWindWidget(ctx, size, maprotation, data, textrotation=0) {
+  function drawWindWidget(ctx, size, maprotation, data, textrotation = 0) {
     //        console.log("wind widget",data);
     if (typeof maprotation == "undefined") {
       return;
@@ -862,7 +875,7 @@
         drawLayline(ctx, size, maprotation + data.VMCB, 0, "lightblue");
       }
     }
-    if ((data.ApparentWind??true) && knots(data.AWS) >= 1) {
+    if ((data.ApparentWind ?? true) && knots(data.AWS) >= 1) {
       drawWindArrow(ctx, size, maprotation + data.AWD, blue, "A");
     }
     if (knots(data.TWS) >= 1) {
@@ -972,7 +985,7 @@
           0,
           0,
           radius,
-          angle+rotation,
+          angle + rotation,
           "center",
           false,
           inward,
@@ -992,10 +1005,7 @@
     if (!val("STW", size, +135)) val("SOG", size, 135);
   }
 
-  avnav.api.registerWidget(
-    SailInstrumentOverlay,
-    Sail_Instrument_OverlayParameter,
-  );
+  api.registerWidget(SailInstrumentOverlay, Sail_Instrument_OverlayParameter);
 
   function drawPolar(ctx, size, angle, data, color) {
     ctx.save();
@@ -1083,16 +1093,16 @@
     },
   };
 
-  avnav.api.registerWidget(LayLines_Overlay, LayLines_OverlayParameter);
+  api.registerWidget(LayLines_Overlay, LayLines_OverlayParameter);
   /*##################################################################################################*/
 
-  let LatLon = avnav.api.LatLon();
+  let LatLon = api.LatLon();
   function calc_intersections(self, props) {
     //    console.log('props',props);
     let POS = new LatLon(props.POS.lat, props.POS.lon);
-    //POS = avnav.api.createLatLon(props.boatposition.lat, props.boatposition.lon);
+    //POS = api.createLatLon(props.boatposition.lat, props.boatposition.lon);
     if (props.WP) {
-      WP = new LatLon(props.WP.lat, props.WP.lon);
+      const WP = new LatLon(props.WP.lat, props.WP.lon);
 
       // Intersections berechnen
       //        console.log(props.LLS,props.LLP);
@@ -1109,7 +1119,7 @@
         to360(props.LLS + 180),
       );
       //        console.log(POS,is_SB,is_BB);
-      calc_endpoint = function (intersection, pos) {
+      function calc_endpoint(intersection, pos) {
         let is = {};
         is.dist = pos.rhumbDistanceTo(intersection); // in m
         let maxLength = props.Laylinelength_nm * 1852;
@@ -1126,9 +1136,10 @@
           );
         else is.pos = intersection;
         return is;
-      };
+      }
 
-      is_BB_boat = is_BB_WP = is_SB_boat = is_SB_WP = null;
+      let is_BB_boat, is_BB_WP, is_SB_boat, is_SB_WP;
+      // is_BB_boat = is_BB_WP = is_SB_boat = is_SB_WP = null;
       if (is_BB) {
         is_BB_boat = calc_endpoint(is_BB, POS);
         is_BB_WP = calc_endpoint(is_BB, WP);
@@ -1193,11 +1204,11 @@
       intersections != null
     ) {
       // port
-      p1 = self.lonLatToPixel(
+      let p1 = self.lonLatToPixel(
         intersections.Boat.BB.P1._lon,
         intersections.Boat.BB.P1._lat,
       );
-      p2 = self.lonLatToPixel(
+      let p2 = self.lonLatToPixel(
         intersections.Boat.BB.P2._lon,
         intersections.Boat.BB.P2._lat,
       );
@@ -1219,11 +1230,11 @@
       intersections != null
     ) {
       // port
-      p1 = self.lonLatToPixel(
+      let p1 = self.lonLatToPixel(
         intersections.WP.BB.P1._lon,
         intersections.WP.BB.P1._lat,
       );
-      p2 = self.lonLatToPixel(
+      let p2 = self.lonLatToPixel(
         intersections.WP.BB.P2._lon,
         intersections.WP.BB.P2._lat,
       );
@@ -1589,7 +1600,7 @@
     },
   };
 
-  avnav.api.registerWidget(FuelGaugeWidget, {
+  api.registerWidget(FuelGaugeWidget, {
     value: true,
     formatter: true,
     formatterParameters: true,
@@ -1790,7 +1801,7 @@
     },
   };
 
-  avnav.api.registerWidget(LinearCompassWidget, {
+  api.registerWidget(LinearCompassWidget, {
     value: true,
     mass: { type: "FLOAT", default: 100 },
     friction: { type: "FLOAT", default: 0.2 },
@@ -1800,7 +1811,11 @@
     altTicks: { type: "BOOLEAN", default: false },
     letters: { type: "BOOLEAN", default: true },
     bearing: { type: "BOOLEAN", default: true },
-    magnetic: { type: "BOOLEAN", default: false, description: "convert bearing to magnetic" },
+    magnetic: {
+      type: "BOOLEAN",
+      default: false,
+      description: "convert bearing to magnetic",
+    },
   });
 
   var RoundCompassWidget = {
@@ -1905,7 +1920,7 @@
     },
   };
 
-  avnav.api.registerWidget(RoundCompassWidget, {
+  api.registerWidget(RoundCompassWidget, {
     value: true,
     mass: { type: "FLOAT", default: 100 },
     friction: { type: "FLOAT", default: 0.2 },
@@ -1914,7 +1929,11 @@
     altTicks: { type: "BOOLEAN", default: false },
     letters: { type: "BOOLEAN", default: true },
     bearing: { type: "BOOLEAN", default: true },
-    magnetic: { type: "BOOLEAN", default: false, description: "convert bearing to magnetic" },
+    magnetic: {
+      type: "BOOLEAN",
+      default: false,
+      description: "convert bearing to magnetic",
+    },
   });
 
   var RoundCompass2Widget = {
@@ -2039,14 +2058,18 @@
     },
   };
 
-  avnav.api.registerWidget(RoundCompass2Widget, {
+  api.registerWidget(RoundCompass2Widget, {
     value: true,
     mass: { type: "FLOAT", default: 300 },
     friction: { type: "FLOAT", default: 0.2 },
     showValue: { type: "BOOLEAN", default: false },
     half: { type: "BOOLEAN", default: false },
     bearing: { type: "BOOLEAN", default: true },
-    magnetic: { type: "BOOLEAN", default: false, description: "convert bearing to magnetic" },
+    magnetic: {
+      type: "BOOLEAN",
+      default: false,
+      description: "convert bearing to magnetic",
+    },
   });
 
   var SVGCompass = {
@@ -2094,7 +2117,7 @@
     },
   };
 
-  avnav.api.registerWidget(SVGCompass, {
+  api.registerWidget(SVGCompass, {
     value: true,
     showValue: { type: "BOOLEAN", default: false },
     half: { type: "BOOLEAN", default: false },
@@ -2250,7 +2273,7 @@
       description: "absolute value, remove sign",
     },
   ];
-  avnav.api.registerFormatter("0float", formatFloat);
+  api.registerFormatter("0float", formatFloat);
 
   function convertTo(value, unit) {
     let f = 1.0;
@@ -2261,7 +2284,7 @@
     if (unit == "kn") f = 3600 / 1852.0;
     if (unit == "km/h") f = 3.6;
     if (unit == "hPa") f = 1 / 100.0;
-    if (unit == "C"||unit == "°C") return value - 273.15;
+    if (unit == "C" || unit == "°C") return value - 273.15;
     if (unit == "bft") {
       const v = (value * 3600) / 1852.0;
       if (v <= 1) return 0;
@@ -2284,7 +2307,7 @@
   function formatTime(value, seconds = false, utc = false) {
     value = parseInt(value);
     if (!isFinite(value)) return "--:--" + (seconds ? ":--" : "");
-    const d = new Date(value*1000);
+    const d = new Date(value * 1000);
     let hms = utc
       ? [d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds()]
       : [d.getHours(), d.getMinutes(), d.getSeconds()];
@@ -2308,17 +2331,19 @@
   function formatValue(value, opts) {
     if (opts.format == "180") value = to180(value);
     if (opts.format == "360") value = to360(value);
-    if (opts.format == "time") return formatTime(value, opts.digits >= 6, opts.utc);
+    if (opts.format == "time")
+      return formatTime(value, opts.digits >= 6, opts.utc);
     if (opts.format == "HH:MM") return formatHHMM(value, opts.digits >= 6);
     if (opts.format.startsWith("D")) return formatPos(value, opts.format);
-    if (opts.percent) value = 100 * (value-opts.lower) / (opts.upper-opts.lower);
+    if (opts.percent)
+      value = (100 * (value - opts.lower)) / (opts.upper - opts.lower);
     return formatFloat(
       value,
       opts.digits,
       opts.maxfrac,
       opts.zeroes,
       true,
-      opts.overflow ? null : '#',
+      opts.overflow ? null : "#",
       opts.posSign ? "+" : " ",
       opts.abs,
     );
@@ -2332,7 +2357,7 @@
       LON: "nav.gps.lon",
       VALID: "nav.gps.valid",
     },
-    formatter: avnav.api.formatter.formatString,
+    formatter: api.formatter.formatString,
     renderHtml: function (data) {
       let value = data.value;
       if (value instanceof Date) value = Math.round(value.getTime() / 1000); // as unix seconds
@@ -2343,8 +2368,8 @@
         .replaceAll(":", "\uA789") // modified colon
         .replaceAll("-", "\u2012") // figure dash
         .replaceAll(" ", "\u2007"); // figure space
-        // .replace(/\.$/, "\u2008"); // punctuation space
-      if (str.endsWith('.')) str = "\u2008" + str.slice(0, -1);
+      // .replace(/\.$/, "\u2008"); // punctuation space
+      if (str.endsWith(".")) str = "\u2008" + str.slice(0, -1);
       let cls = str.length > 8 ? "small" : str.length > 6 ? "medium" : "big";
       cls += data.format.startsWith("D") ? " mono" : "";
       if (data.validity && !data.VALID) cls += " error invalid";
@@ -2352,27 +2377,31 @@
         cls += value < data.lower || value > data.upper ? " warning" : "";
       }
       // console.log(data.caption,data.unit, data.value,`(${value})`,'>',str);
-      let style = '';
+      let style = "";
       if (data.bar && isFinite(value)) {
         if (data.symmetric) {
-          let p = 100 * (value - data.lower) / (data.upper - data.lower);
+          let p = (100 * (value - data.lower)) / (data.upper - data.lower);
           let a = clamp(0, p, 50);
           let b = clamp(50, p, 100);
-          let c = p > 50 ? 'lightgreen' : 'coral';
+          let c = p > 50 ? "lightgreen" : "coral";
           style = `background: linear-gradient(to right, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
         } else {
-          let p = clamp(0,100 * (value - data.lower) / (data.upper - data.lower),100);
+          let p = clamp(
+            0,
+            (100 * (value - data.lower)) / (data.upper - data.lower),
+            100,
+          );
           let c = data.barColor;
-          let d = data.upper > data.lower ? 'to right' : 'to left';
+          let d = data.upper > data.lower ? "to right" : "to left";
           style = `background: linear-gradient(${d}, ${c} ${p}%, transparent ${p}%);`;
         }
       }
-      if (data.percent) str += '%';
+      if (data.percent) str += "%";
       return `<div class="widgetData ${cls}" style="${style}">${str}</div>`;
     },
   };
 
-  avnav.api.registerWidget(uniWidget, {
+  api.registerWidget(uniWidget, {
     value: true,
     formatter: false,
     format: {
@@ -2452,4 +2481,4 @@
       description: "show error if !gps.valid",
     },
   });
-})();
+};
