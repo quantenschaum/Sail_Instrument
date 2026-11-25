@@ -11,14 +11,7 @@ export default async (api) => {
   }
   log("start", api, api.getAvNavVersion());
 
-  const avnavVersion = api.getAvNavVersion();
   const LatLon = api.LatLon();
-
-  function toDateTime(secs) {
-    let t = new Date(1970, 0, 1); // Epoch
-    t.setSeconds(secs);
-    return t;
-  }
 
   const FONT = "roboto,droid sans,open sans,noto sans,arial,sans-serif";
 
@@ -794,8 +787,7 @@ export default async (api) => {
         const [w, h] = map.getDimensions();
         ctx.translate(w / 2, h / 2);
       } else if (data.Widgetposition == "Boatposition") {
-        if (data.POS == null || data.POS.lon == null || data.POS.lat == null)
-          return;
+        if (data?.POS?.lon == null || data?.POS?.lat == null) return;
         const [tx, ty] = map.lonLatToPixel(data.POS.lon, data.POS.lat);
         ctx.translate(tx, ty);
       }
@@ -812,7 +804,7 @@ export default async (api) => {
   };
 
   function knots(v) {
-    return 1.94384 * v;
+    return (3600 / 1852) * v;
   }
 
   const red = "red";
@@ -2392,32 +2384,37 @@ export default async (api) => {
       let cls = str.length > 8 ? "small" : str.length > 6 ? "medium" : "big";
       cls += data.format.startsWith("D") ? " mono" : "";
       if (data.validity && !data.VALID) cls += " error invalid";
+
       const useThresholds = ["0.00", "180", "360", "HH:MM"].includes(
         data.format,
       );
-      if (!data.bar && useThresholds) {
-        cls += value < data.lower || value > data.upper ? " warning" : "";
-      }
+
       let style = "";
-      if (data.bar && useThresholds && isFinite(value)) {
-        if (data.symmetric) {
-          let p = (100 * (value - data.lower)) / (data.upper - data.lower);
-          let a = clamp(0, p, 50);
-          let b = clamp(50, p, 100);
-          let c = p > 50 ? "lightgreen" : "coral";
-          style = `background: linear-gradient(to right, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
+      if (useThresholds && isFinite(value)) {
+        if (data.bar) {
+          if (data.symmetric) {
+            let p = (100 * (value - data.lower)) / (data.upper - data.lower);
+            let a = clamp(0, p, 50);
+            let b = clamp(50, p, 100);
+            let c = p > 50 ? "lightgreen" : "coral";
+            style = `background: linear-gradient(to right, transparent ${a}%, ${c} ${a}%, ${c} ${b}%, transparent ${b}%);`;
+          } else {
+            let p = clamp(
+              0,
+              (100 * (value - data.lower)) / (data.upper - data.lower),
+              100,
+            );
+            let c = data.barColor;
+            let d = data.upper > data.lower ? "to right" : "to left";
+            if (data.vertical)
+              d = data.upper > data.lower ? "to top" : "to bottom";
+            style = `background: linear-gradient(${d}, ${c} ${p}%, transparent ${p}%);`;
+          }
         } else {
-          let p = clamp(
-            0,
-            (100 * (value - data.lower)) / (data.upper - data.lower),
-            100,
-          );
-          let c = data.barColor;
-          let d = data.upper > data.lower ? "to right" : "to left";
-          style = `background: linear-gradient(${d}, ${c} ${p}%, transparent ${p}%);`;
+          cls += value < data.lower || value > data.upper ? " warning" : "";
         }
       }
-      if (data.percent) str += "%";
+
       return `<div class="widgetData ${cls}" style="${style}">${str}</div>`;
     },
   };
@@ -2487,6 +2484,12 @@ export default async (api) => {
         { format: "360" },
         { format: "HH:MM" },
       ],
+    },
+    vertical: {
+      type: "BOOLEAN",
+      default: false,
+      description: "colorbar vertical, fill from bottom up",
+      condition: [{ bar: true }],
     },
     symmetric: {
       type: "BOOLEAN",
