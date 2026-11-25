@@ -54,11 +54,13 @@ hasgeomag = False
 # https://www.ncei.noaa.gov/products/world-magnetic-model
 try:
     import geomag
+
     hasgeomag = True
 except:
     try:
         sys.path.insert(0, os.path.dirname(__file__) + "/lib")
         import geomag
+
         hasgeomag = True
     except:
         pass
@@ -132,18 +134,14 @@ INPUT_FIELDS = {
 
 NMEA_SENTENCES = {
     # https://gpsd.gitlab.io/gpsd/NMEA.html
-    # set and drift
-    "SET,DFT": "${ID}VDR,{data.SET:.1f},T,,,{data.DFT*KNOTS:.1f},N",
+    "SETF,DFTF": "${ID}VDR,{data.SETF:.1f},T,,,{data.DFTF*KNOTS:.1f},N",  # set and drift
     "HDM": "${ID}HDM,{data.HDM:.1f},M",  # magnetic heading
     "HDT": "${ID}HDT,{data.HDT:.1f},T",  # true heading
     "HDC,DEV,VAR": "${ID}HDG,{data.HDC:.1f},{abs(data.DEV):.1f},{'E' if data.DEV>=0 else 'W'},{abs(data.VAR):.1f},{'E' if data.VAR>=0 else 'W'}",
     "HDT,HDM,STW": "${ID}VHW,{data.HDT:.1f},T,{data.HDM:.1f},M,{data.STW*KNOTS:.1f},N,,",
-    # true wind direction and speed
-    "TWD,TWS": "${ID}MWD,{to360(data.TWD):.1f},T,,,{data.TWS*KNOTS:.1f},N,,",
-    # true wind angle and speed
-    "TWA,TWS": "${ID}MWV,{to360(data.TWA):.1f},T,{data.TWS*KNOTS:.1f},N,A",
-    # apparent wind angle and speed
-    "AWA,AWS": "${ID}MWV,{to360(data.AWA):.1f},R,{data.AWS*KNOTS:.1f},N,A",
+    "TWDF,TWSF": "${ID}MWD,{to360(data.TWDF):.1f},T,,,{data.TWSF*KNOTS:.1f},N,,",  # true wind direction and speed
+    "TWAF,TWSF": "${ID}MWV,{to360(data.TWAF):.1f},T,{data.TWSF*KNOTS:.1f},N,A",  # true wind angle and speed
+    "AWAF,AWSF": "${ID}MWV,{to360(data.AWAF):.1f},R,{data.AWSF*KNOTS:.1f},N,A",  # apparent wind angle and speed
     "DBS": "${ID}DBS,,,{data.DBS:.1f},M,,",  # depth below surface
     "DBT": "${ID}DBT,,,{data.DBT:.1f},M,,",  # depth below transducer
     "DBK": "${ID}DBK,,,{data.DBK:.1f},M,,",  # depth below keel
