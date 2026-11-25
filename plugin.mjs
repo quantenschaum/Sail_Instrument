@@ -9,7 +9,10 @@ export default async (api) => {
       ...a,
     );
   }
-  log("start", api);
+  log("start", api, api.getAvNavVersion());
+
+  const avnavVersion = api.getAvNavVersion();
+  const LatLon = api.LatLon();
 
   function toDateTime(secs) {
     let t = new Date(1970, 0, 1); // Epoch
@@ -674,7 +677,7 @@ export default async (api) => {
       ctx.fill();
       ctx.stroke();
 
-      drawWindWidget(ctx, 100, -data.HDT, data);
+      drawWindWidget(ctx, data, -data.HDT);
 
       ctx.restore();
     },
@@ -753,7 +756,6 @@ export default async (api) => {
     Displaysize: 100,
     Opacity: 1,
     Widgetposition: "Boatposition",
-
     name: "Sail_Instrument_Overlay",
     type: "map",
     storeKeys: {
@@ -784,32 +786,27 @@ export default async (api) => {
     renderCanvas: function (canvas, data, map) {
       //        log(data);
       const s = map.getScale();
-      const [w, h] = map.getDimensions();
 
       const ctx = map.getContext();
       ctx.save();
 
       if (data.Widgetposition == "Mapcenter") {
+        const [w, h] = map.getDimensions();
         ctx.translate(w / 2, h / 2);
       } else if (data.Widgetposition == "Boatposition") {
-        if (data.POS == null || (data.POS.lon == 0 && data.POS.lat == 0))
+        if (data.POS == null || data.POS.lon == null || data.POS.lat == null)
           return;
-        const [tx, ty] = this.lonLatToPixel(data.POS.lon, data.POS.lat);
+        const [tx, ty] = map.lonLatToPixel(data.POS.lon, data.POS.lat);
         ctx.translate(tx, ty);
       }
 
       ctx.scale(s, s);
+      ctx.scale(data.Displaysize / 100, data.Displaysize / 100);
 
       ctx.globalAlpha *= data.Opacity;
       if (data.NightInvert && data.nightMode)
         ctx.filter = "invert(100%) hue-rotate(180deg)";
-      drawWindWidget(
-        ctx,
-        data.Displaysize,
-        0,
-        data,
-        -degrees(this.getRotation()),
-      );
+      drawWindWidget(ctx, data, 0, -degrees(map.getRotation()));
       ctx.restore();
     },
   };
@@ -825,11 +822,9 @@ export default async (api) => {
   const black = "black";
   const orange = "orange";
 
-  function drawWindWidget(ctx, size, maprotation, data, textrotation = 0) {
-    //        console.log("wind widget",data);
-    if (typeof maprotation == "undefined") {
-      return;
-    }
+  function drawWindWidget(ctx, data, maprotation, textrotation = 0) {
+    //        console.log("dww",data);
+    const size = 100;
     let vmin = data.VMIN ?? 0;
     let rings = data.Rings ?? true;
     let displayData = !!data.DisplayData;
@@ -1053,18 +1048,17 @@ export default async (api) => {
     },
     initFunction: function () {},
     finalizeFunction: function () {},
-    renderCanvas: function (canvas, data, center) {
-      if (typeof data.POS != "undefined") {
-        let ctx = canvas.getContext("2d");
+    renderCanvas: function (canvas, data, map) {
+      if (data.POS == null || data.POS.lon == null || data.POS.lat == null)
+        return;
+      const ctx = map.getContext();
+      try {
         ctx.save();
-        ctx.globalAlpha *= data.Opacity;
-
-        let intersections = calc_intersections(self, data);
-        //            console.log(intersections);
-
-        if (typeof intersections != "undefined") {
-          DrawMapLaylines(this, ctx, intersections, data);
-        }
+        ctx.globalAlpha = data.Opacity;
+        const intersections = calc_intersections(self, data);
+        if (intersections == null) return;
+        DrawMapLaylines(map, ctx, intersections, data);
+      } finally {
         ctx.restore();
       }
     },
@@ -1096,7 +1090,6 @@ export default async (api) => {
   api.registerWidget(LayLines_Overlay, LayLines_OverlayParameter);
   /*##################################################################################################*/
 
-  let LatLon = api.LatLon();
   function calc_intersections(self, props) {
     //    console.log('props',props);
     let POS = new LatLon(props.POS.lat, props.POS.lon);
@@ -1184,17 +1177,17 @@ export default async (api) => {
     }
   }
 
-  function DrawMapLaylines(self, ctx, intersections, props) {
+  function DrawMapLaylines(map, ctx, intersections, props) {
     ctx.save();
+    const s = map.getScale();
 
     function drawLine(p1, p2, color) {
       ctx.beginPath();
       ctx.moveTo(p1[0], p1[1]);
       ctx.lineTo(p2[0], p2[1]);
-      ctx.lineWidth = 3;
+      ctx.lineWidth = s * 2;
       ctx.strokeStyle = color;
-      const d = 5 * window.devicePixelRatio;
-      ctx.setLineDash([2 * d, d]);
+      ctx.setLineDash([s * 8, s * 6]);
       ctx.stroke();
     }
 
@@ -1204,21 +1197,21 @@ export default async (api) => {
       intersections != null
     ) {
       // port
-      let p1 = self.lonLatToPixel(
+      let p1 = map.lonLatToPixel(
         intersections.Boat.BB.P1._lon,
         intersections.Boat.BB.P1._lat,
       );
-      let p2 = self.lonLatToPixel(
+      let p2 = map.lonLatToPixel(
         intersections.Boat.BB.P2._lon,
         intersections.Boat.BB.P2._lat,
       );
       drawLine(p1, p2, red);
       // starboard
-      p1 = self.lonLatToPixel(
+      p1 = map.lonLatToPixel(
         intersections.Boat.SB.P1._lon,
         intersections.Boat.SB.P1._lat,
       );
-      p2 = self.lonLatToPixel(
+      p2 = map.lonLatToPixel(
         intersections.Boat.SB.P2._lon,
         intersections.Boat.SB.P2._lat,
       );
@@ -1230,21 +1223,21 @@ export default async (api) => {
       intersections != null
     ) {
       // port
-      let p1 = self.lonLatToPixel(
+      let p1 = map.lonLatToPixel(
         intersections.WP.BB.P1._lon,
         intersections.WP.BB.P1._lat,
       );
-      let p2 = self.lonLatToPixel(
+      let p2 = map.lonLatToPixel(
         intersections.WP.BB.P2._lon,
         intersections.WP.BB.P2._lat,
       );
       drawLine(p1, p2, green);
       // starboard
-      p1 = self.lonLatToPixel(
+      p1 = map.lonLatToPixel(
         intersections.WP.SB.P1._lon,
         intersections.WP.SB.P1._lat,
       );
-      p2 = self.lonLatToPixel(
+      p2 = map.lonLatToPixel(
         intersections.WP.SB.P2._lon,
         intersections.WP.SB.P2._lat,
       );
@@ -1278,7 +1271,7 @@ export default async (api) => {
     ctx.lineTo(0, -radius);
     ctx.lineWidth = 0.02 * radius;
     ctx.strokeStyle = color;
-    let d = 3 * window.devicePixelRatio;
+    let d = 0.04 * radius;
     ctx.setLineDash([d, d]);
     ctx.stroke();
 
@@ -2181,49 +2174,88 @@ export default async (api) => {
     return lat + "\u2009" + lon + "\u2009";
   }
 
+  const formatStrDescription =
+    "format string, #=digit or space, 0=digit or 0, prefix with -/+ for signed numbers, 0s after . means fixed fractionals otherwise it's the max number of fractionals, no . means integer, prefix with | for absolute";
+
+  function formatFloatStr(value, format) {
+    format = format.trim() || "#.##";
+    const [fint, ffrc = ""] = format.split(".");
+    const g = fint.startsWith("-") || fint.startsWith("+");
+    const a = fint.startsWith("|");
+    const fint2 = fint.substring(g || a ? 1 : 0);
+    const d = (g ? -1 : 1) * (fint2.length + ffrc.length);
+    const f = ffrc.startsWith("0");
+    const m = (f ? -1 : 1) * ffrc.length;
+    const l = fint2.startsWith("0");
+    const s = fint.startsWith("+") ? "+" : " ";
+    return formatFloat(value, d, m, l, "#", s, a);
+  }
+  formatFloatStr.parameters = [
+    {
+      name: "formatStr",
+      type: "STRING",
+      default: "##.#",
+      description: formatStrDescription,
+    },
+  ];
+  api.registerFormatter("0floatstr", formatFloatStr);
+
   function formatFloat(
-    number,
-    digits,
-    maxFrac,
-    leadingZeroes = false,
-    trailingDot = true,
-    overflow = "#",
-    positiveSign = " ",
-    absolute = false,
+    value, // value to format
+    totaldigits, // total totaldigits, negative = signed
+    fractionals, // fractional totaldigits, negative = fixed, positive = max
+    leadingZeroes = false, // generate leading zeroes
+    overflow = "#", // overflow character
+    signs = "", // signs if other than default (1st=pos, 2nd=neg, i.e. "+-")
+    absolute = false, // format as absolute value, discard sign
   ) {
-    if (!digits) digits = 3;
-    let signed = digits < 0;
-    digits = Math.abs(digits);
-    if (maxFrac == null) maxFrac = digits - 1;
-    const fixed = maxFrac < 0;
-    maxFrac = clamp(0, Math.abs(maxFrac), digits - 1);
-    number = parseFloat(number); // null-->NaN
-    if (!isFinite(number))
+    if (!totaldigits) totaldigits = 3;
+    const signed = totaldigits < 0;
+    totaldigits = Math.abs(totaldigits);
+    const total = totaldigits;
+    if (fractionals == null) fractionals = totaldigits - 1;
+    const fixed = fractionals < 0;
+    fractionals = clamp(0, Math.abs(fractionals), totaldigits - 1);
+    // value = parseFloat(String(value)); // null-->NaN
+    if (value == null || !isFinite(value)) {
       return (
-        "-".repeat((signed ? 1 : 0) + digits - maxFrac) +
-        (maxFrac ? "." + "-".repeat(maxFrac) : "")
+        (signed ? " " : "") +
+        "-".repeat(totaldigits - fractionals) +
+        (fractionals ? "." + "-".repeat(fractionals) : "")
       );
-    if (absolute) number = Math.abs(number);
-    if (digits == 0) return number.toFixed(0);
-    if (number < 0 && !signed) digits -= 1; // make room for unexpected sign
-    let sign = number < 0 ? "-" : signed ? positiveSign || " " : "";
-    number = Math.abs(number);
-    let decPlaces = digits - 1 - Math.floor(Math.log10(number));
-    decPlaces = fixed ? maxFrac : clamp(0, decPlaces, maxFrac);
-    let str = number.toFixed(decPlaces);
-    let n = digits + (str.includes(".") ? 1 : 0); // expected length of string
-    if (overflow && str.length > n)
+    }
+    if (absolute) value = Math.abs(value);
+    if (totaldigits == 0) return value.toFixed(0);
+    if (value < 0 && !signed) {
+      totaldigits -= 1; // make room for unexpected sign
+      fractionals = clamp(0, Math.abs(fractionals), totaldigits - 1);
+    }
+    const negativeSign = signs.substring(1, 2) || "-";
+    const positiveSign = signs.substring(0, 1) || " ";
+    const sign =
+      value < 0 || Object.is(value, -0)
+        ? negativeSign
+        : signed
+          ? positiveSign
+          : "";
+    value = Math.abs(value);
+    let decPlaces = totaldigits - 1 - Math.floor(Math.log10(value));
+    decPlaces = fixed ? fractionals : clamp(0, decPlaces, fractionals);
+    const str = value.toFixed(decPlaces);
+    const n = totaldigits + (str.includes(".") ? 1 : 0); // expected length of string
+    if (overflow && str.length > n) {
       return (
-        overflow.repeat((signed ? 1 : 0) + digits) +
-        (trailingDot && maxFrac ? "." : "")
+        overflow.repeat((signed ? 1 : 0) + total) + (fractionals ? "." : "")
       );
-    let dot = trailingDot && maxFrac && !str.includes(".") ? "." : "";
+    }
+    const dot = fractionals && !str.includes(".") ? "." : "";
     if (leadingZeroes) {
       return sign + str.padStart(n, "0") + dot; // -001.23
     } else {
       return (sign + str).padStart(n + sign.length, " ") + dot; // __-1.23
     }
   }
+
   formatFloat.parameters = [
     {
       name: "digits",
@@ -2233,11 +2265,11 @@ export default async (api) => {
         "number of (significant) digits in total, negative: padding space is added for sign",
     },
     {
-      name: "maxFrac",
+      name: "fractionals",
       type: "NUMBER",
       default: 2,
       description:
-        "max. number of fractional digits (after the decimal point, default = digits-1, 0 = integer, <0 = fixed)",
+        "max. number of fractional digits (after the decimal point, default = digits-1, 0 = integer, negative = fixed)",
     },
     {
       name: "leadingZeroes",
@@ -2246,47 +2278,44 @@ export default async (api) => {
       description: "output leading zeroes instead of leading spaces",
     },
     {
-      name: "trailingDot",
-      type: "BOOLEAN",
-      default: true,
-      description:
-        "output . if decimal separator is at right end (maxFrac=0 implies false)",
-    },
-    {
       name: "overflow",
       type: "STRING",
       default: "#",
       description:
-        "character to show on overflow (number needs more digits than allowed, if empty overflow is allowed)",
+        "character to show on over/under-flow (number needs more digits than allowed, if empty overflow is allowed)",
     },
     {
-      name: "positiveSign",
+      name: "signs",
       type: "STRING",
-      default: " ",
+      default: "",
       description:
-        "sign to show for numbers>0 if digits<0 (set to + to show positive sign)",
+        "sign character for negative and positive numbers, default = '- ', set to '-+' to show positive signs",
     },
     {
       name: "absolute",
       type: "BOOLEAN",
       default: false,
-      description: "absolute value, remove sign",
+      description: "shownabsolute value, remove sign",
     },
   ];
   api.registerFormatter("0float", formatFloat);
 
+  const mpf = 0.3048; // meter/foot
+
   function convertTo(value, unit) {
     let f = 1.0;
-    if (unit == "ft") f = 3.280839895; // feet
-    if (unit == "yd") f = 3.280839895 / 3; // yards
-    if (unit == "km") f = 1 / 1000.0;
-    if (unit == "nm") f = 1 / 1852.0;
-    if (unit == "kn") f = 3600 / 1852.0;
+    if (unit == "ft") f = 1 / mpf; // feet
+    if (unit == "yd") f = 1 / mpf / 3; // yards
+    if (unit == "ftm") f = 1 / mpf / 6; // fathom
+    if (unit == "km") f = 1 / 1000;
+    if (unit == "nm") f = 1 / 1852;
+    if (unit == "cbl") f = 1 / 185.2; // cable
+    if (unit == "kn") f = 3600 / 1852;
     if (unit == "km/h") f = 3.6;
-    if (unit == "hPa") f = 1 / 100.0;
+    if (unit == "hPa") f = 1 / 100;
     if (unit == "C" || unit == "°C") return value - 273.15;
     if (unit == "bft") {
-      const v = (value * 3600) / 1852.0;
+      const v = (value * 3600) / 1852;
       if (v <= 1) return 0;
       if (v <= 3) return 1;
       if (v <= 6) return 2;
@@ -2315,7 +2344,7 @@ export default async (api) => {
     return hms.map((v) => pad(v, 2)).join(":");
   }
 
-  function formatHHMM(value, seconds) {
+  function formatHHMM(value, seconds = false) {
     value = parseInt(value);
     if (!isFinite(value) || value < 0) return "--:--" + (seconds ? ":--" : "");
     const SEC = Math.round(Math.abs(value));
@@ -2331,22 +2360,12 @@ export default async (api) => {
   function formatValue(value, opts) {
     if (opts.format == "180") value = to180(value);
     if (opts.format == "360") value = to360(value);
-    if (opts.format == "time")
-      return formatTime(value, opts.digits >= 6, opts.utc);
-    if (opts.format == "HH:MM") return formatHHMM(value, opts.digits >= 6);
+    if (opts.format == "time") return formatTime(value, opts.seconds, opts.utc);
+    if (opts.format == "HH:MM") return formatHHMM(value, opts.seconds);
     if (opts.format.startsWith("D")) return formatPos(value, opts.format);
     if (opts.percent)
       value = (100 * (value - opts.lower)) / (opts.upper - opts.lower);
-    return formatFloat(
-      value,
-      opts.digits,
-      opts.maxfrac,
-      opts.zeroes,
-      true,
-      opts.overflow ? null : "#",
-      opts.posSign ? "+" : " ",
-      opts.abs,
-    );
+    return formatFloatStr(value, opts.formatStr);
   }
 
   var uniWidget = {
@@ -2373,12 +2392,14 @@ export default async (api) => {
       let cls = str.length > 8 ? "small" : str.length > 6 ? "medium" : "big";
       cls += data.format.startsWith("D") ? " mono" : "";
       if (data.validity && !data.VALID) cls += " error invalid";
-      if (data.format == "0.00") {
+      const useThresholds = ["0.00", "180", "360", "HH:MM"].includes(
+        data.format,
+      );
+      if (!data.bar && useThresholds) {
         cls += value < data.lower || value > data.upper ? " warning" : "";
       }
-      // console.log(data.caption,data.unit, data.value,`(${value})`,'>',str);
       let style = "";
-      if (data.bar && isFinite(value)) {
+      if (data.bar && useThresholds && isFinite(value)) {
         if (data.symmetric) {
           let p = (100 * (value - data.lower)) / (data.upper - data.lower);
           let a = clamp(0, p, 50);
@@ -2406,74 +2427,78 @@ export default async (api) => {
     formatter: false,
     format: {
       type: "SELECT",
-      list: ["0.00", "180", "360", "HH:MM", "time", "DD", "DDM", "DMS", "%"],
+      description: "type of value, how to format",
+      list: ["0.00", "180", "360", "HH:MM", "time", "DD", "DDM", "DMS"],
       default: "0.00",
     },
-    digits: {
-      type: "NUMBER",
-      default: 3,
-      description: "number of total digits, negative=signed",
+    formatStr: {
+      type: "STRING",
+      description: formatStrDescription,
+      default: "##.#",
+      condition: [{ format: "0.00" }, { format: "180" }, { format: "360" }],
     },
-    maxfrac: {
-      type: "NUMBER",
-      default: 2,
-      description:
-        "max. number of fractional digits, negative=fixed, 0=integer",
-    },
-    zeroes: {
+    seconds: {
       type: "BOOLEAN",
+      description: "show seconds",
       default: false,
-      description: "leading zeroes",
-    },
-    posSign: {
-      type: "BOOLEAN",
-      default: false,
-      description: "show positive sign +",
-    },
-    abs: {
-      type: "BOOLEAN",
-      default: false,
-      description: "show absolute value (remove sign)",
-    },
-    overflow: {
-      type: "BOOLEAN",
-      default: false,
-      description: "allow overflow",
+      condition: [{ format: "HH:MM" }, { format: "time" }],
     },
     utc: {
       type: "BOOLEAN",
-      default: false,
       description: "time in UTC",
+      default: false,
+      condition: [{ format: "HH:MM" }, { format: "time" }],
     },
     lower: {
       type: "FLOAT",
       default: -99999,
       description: "lower warning threshold",
+      condition: [
+        { format: "0.00" },
+        { format: "180" },
+        { format: "360" },
+        { format: "HH:MM" },
+      ],
     },
     upper: {
       type: "FLOAT",
       default: +99999,
       description: "upper warning threshold",
+      condition: [
+        { format: "0.00" },
+        { format: "180" },
+        { format: "360" },
+        { format: "HH:MM" },
+      ],
     },
     percent: {
       type: "BOOLEAN",
       default: false,
       description: "show value as percent of thresholds",
+      condition: [{ format: "0.00" }],
     },
     bar: {
       type: "BOOLEAN",
       default: false,
       description: "visualize value relative to thresholds as color bar",
+      condition: [
+        { format: "0.00" },
+        { format: "180" },
+        { format: "360" },
+        { format: "HH:MM" },
+      ],
     },
     symmetric: {
       type: "BOOLEAN",
       default: false,
       description: "color bar symmetric around center in R/G colors",
+      condition: [{ bar: true }],
     },
     barColor: {
       type: "COLOR",
       default: "lightblue",
       description: "color of bar",
+      condition: [{ bar: true, symmetric: false }],
     },
     validity: {
       type: "BOOLEAN",
