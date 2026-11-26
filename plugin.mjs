@@ -15,7 +15,7 @@ export default async (api) => {
 
   const FONT = "roboto,droid sans,open sans,noto sans,arial,sans-serif";
 
-  var LaylineWidget = {
+  const LaylineWidget = {
     name: "time/distance to WP",
     unit: "nm",
     caption: "TTW",
@@ -58,32 +58,35 @@ export default async (api) => {
         let stb = to180(data.TWA) > 0;
         let is = calc_intersections(self, data);
         // console.log(is);
+        let direct;
+        let dist_c, dist_o, dist_t;
+        let time_c, time_o, time_t;
         if (!is) {
           // use direct distance and VMC
-          var direct = true;
-          var WP = new LatLon(data.WP.lat, data.WP.lon);
-          var POS = new LatLon(data.POS.lat, data.POS.lon);
-          var dist_c = POS.rhumbDistanceTo(WP);
-          var dist_o = dist_c;
-          var dist_t = dist_c;
-          var time_c = dist_c / data.VMC;
-          var time_o = time_c;
-          var time_t = time_c;
+          direct = true;
+          const WP = new LatLon(data.WP.lat, data.WP.lon);
+          const POS = new LatLon(data.POS.lat, data.POS.lon);
+          dist_c = POS.rhumbDistanceTo(WP);
+          dist_o = dist_c;
+          dist_t = dist_c;
+          time_c = dist_c / data.VMC;
+          time_o = time_c;
+          time_t = time_c;
         } else {
           // distance on laylines with current speed and estimated speed on opposite tack
-          var direct = false;
-          var dist_c = (stb ? is.Boat.SB : is.Boat.BB).dist; // current tack
-          var dist_o = (stb ? is.Boat.BB : is.Boat.SB).dist; // opposite tack
-          var dist_t = dist_c + dist_o;
-          var time_c = dist_c / (stb ? data.LLSV : data.LLPV);
-          var time_o = dist_o / (stb ? data.LLPV : data.LLSV);
-          var time_t = time_c + time_o;
+          direct = false;
+          dist_c = (stb ? is.Boat.SB : is.Boat.BB).dist; // current tack
+          dist_o = (stb ? is.Boat.BB : is.Boat.SB).dist; // opposite tack
+          dist_t = dist_c + dist_o;
+          time_c = dist_c / (stb ? data.LLSV : data.LLPV);
+          time_o = dist_o / (stb ? data.LLPV : data.LLSV);
+          time_t = time_c + time_o;
         }
 
         if (data.VMC < 0) time_c = time_o = time_t = NaN;
 
         if (data.type == "distance") {
-          var dist =
+          const dist =
             data.tack == "current"
               ? dist_c
               : data.tack == "opposite"
@@ -91,7 +94,7 @@ export default async (api) => {
                 : dist_t;
           val = api.formatter.formatDistance(dist, ...data.formatterParameters);
         } else {
-          var time =
+          const time =
             data.tack == "current"
               ? time_c
               : data.tack == "opposite"
@@ -157,11 +160,11 @@ export default async (api) => {
     //------------------------------------------------------------------------
     ctxRef.save();
     align = align.toLowerCase();
-    var clockwise = align == "right" ? 1 : -1; // draw clockwise for aligned right. Else Anticlockwise
+    const clockwise = align == "right" ? 1 : -1; // draw clockwise for aligned right. Else Anticlockwise
     startAngle = radians(startAngle);
 
     // calculate height of the font
-    var div = document.createElement("div");
+    const div = document.createElement("div");
     div.innerHTML = text;
     div.style.position = "absolute";
     div.style.top = "-10000px";
@@ -169,7 +172,7 @@ export default async (api) => {
     div.style.fontFamily = fName;
     div.style.fontSize = fSize;
     document.body.appendChild(div);
-    var textHeight = div.offsetHeight;
+    const textHeight = div.offsetHeight;
     document.body.removeChild(div);
 
     let metrics = ctxRef.measureText("Mann");
@@ -201,8 +204,8 @@ export default async (api) => {
 
     // rotate 50% of total angle for center alignment
     if (align == "center") {
-      for (var j = 0; j < text.length; j++) {
-        var charWid = ctxRef.measureText(text[j]).width;
+      for (let j = 0; j < text.length; j++) {
+        const charWid = ctxRef.measureText(text[j]).width;
         startAngle +=
           ((charWid + (j == text.length - 1 ? 0 : kerning)) /
             (diameter / 2 - textHeight) /
@@ -215,8 +218,8 @@ export default async (api) => {
     ctxRef.rotate(startAngle);
 
     // draw, rotate, and repeat
-    for (var j = 0; j < text.length; j++) {
-      var charWid = ctxRef.measureText(text[j]).width; // half letter
+    for (let j = 0; j < text.length; j++) {
+      const charWid = ctxRef.measureText(text[j]).width; // half letter
       // rotate half letter
       ctxRef.rotate((charWid / 2 / (diameter / 2 - textHeight)) * clockwise);
       // draw the character at "top" or "bottom"
@@ -237,7 +240,9 @@ export default async (api) => {
     ctxRef.restore();
   }
 
-  var HistoryPlotWidget = {
+  const history = [];
+
+  const HistoryPlotWidget = {
     name: "WindPlot",
     caption: "TWD",
     unit: "°",
@@ -274,7 +279,7 @@ export default async (api) => {
     },
     translateFunction: (props) => {
       //        console.log(props);
-      var units = {
+      const units = {
         TWD: "°",
         TWS: "kn",
         TWA: "°",
@@ -298,8 +303,14 @@ export default async (api) => {
         unit: units[props.quantity],
       };
     },
-    initFunction: function () {},
-    finalizeFunction: function () {},
+    initFunction: function () {
+      log("init");
+      history.length = 0;
+    },
+    finalizeFunction: function () {
+      log("finalize");
+      history.length = 0;
+    },
     renderCanvas: function (canvas, data) {
       // console.log(data);
       if (typeof data.TIME == "undefined") return;
@@ -322,13 +333,13 @@ export default async (api) => {
       canvas.width = w;
       canvas.height = h;
 
-      var q = data.quantity;
+      const q = data.quantity;
       let v = data[q.toUpperCase()];
       let valid = typeof v == "number" && isFinite(v);
       //      console.log(data.quantity,v);
       if (!valid) return;
 
-      var hist = window.windplothist;
+      let hist = window.windplothist;
       if (typeof hist == "undefined") {
         window.windplothist = hist = new Map();
       }
@@ -359,118 +370,119 @@ export default async (api) => {
         return Math.ceil(Math.max(1, max - min));
       }
 
-      var night = data.nightMode;
-      var r = data.range;
-      var xtick = (x) => x.toFixed(1).replace(".0", "");
-      var c0 = (d) => (d.AWA < 0 ? red : d.AWA > 0 ? green : blue);
-      var c1 = (d) => (night ? "#ded714" : blue);
-      var v1 = false;
-      var tackPlot = false;
+      const night = data.nightMode;
+      const r = data.range;
+      let xtick = (x) => x.toFixed(1).replace(".0", "");
+      let c0 = (d) => (d.AWA < 0 ? red : d.AWA > 0 ? green : blue);
+      let c1 = (d) => (night ? "#ded714" : blue);
+      let v0, c, m;
+      let v1 = false;
+      let tackPlot = false;
 
       if (data.quantity == "AWA") {
-        var c = Math.round(data.AWAF);
-        var m = r > 0 ? r : maxrange(q, c);
-        var xtick = (x) => to180(x).toFixed(1).replace(".0", "");
-        var v0 = (d) => to180(d.AWA - c) / m;
-        var v1 = (d) => to180(d.AWAF - c) / m;
+        c = Math.round(data.AWAF);
+        m = r > 0 ? r : maxrange(q, c);
+        xtick = (x) => to180(x).toFixed(1).replace(".0", "");
+        v0 = (d) => to180(d.AWA - c) / m;
+        v1 = (d) => to180(d.AWAF - c) / m;
       } else if (data.quantity == "AWS") {
-        var c = r > 0 ? r / 2 : Math.round(knots(data.AWSF) * 10) / 10;
-        var m = c;
-        var v0 = (d) => (knots(d.AWS) - c) / m;
-        var v1 = (d) => (knots(d.AWSF) - c) / m;
-        var c0 = (d) => "gray";
+        c = r > 0 ? r / 2 : Math.round(knots(data.AWSF) * 10) / 10;
+        m = c;
+        v0 = (d) => (knots(d.AWS) - c) / m;
+        v1 = (d) => (knots(d.AWSF) - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "TWA") {
-        var c = Math.round(data.TWAF);
-        var m = r > 0 ? r : maxrange(q, c);
-        var xtick = (x) => to180(x).toFixed(1).replace(".0", "");
-        var v0 = (d) => to180(d.TWA - c) / m;
-        var v1 = (d) => to180(d.TWAF - c) / m;
+        c = Math.round(data.TWAF);
+        m = r > 0 ? r : maxrange(q, c);
+        xtick = (x) => to180(x).toFixed(1).replace(".0", "");
+        v0 = (d) => to180(d.TWA - c) / m;
+        v1 = (d) => to180(d.TWAF - c) / m;
       } else if (data.quantity == "twa") {
-        var tackPlot = true;
-        var c = 0;
-        var m = 2;
-        var xtick = (x) => "";
-        var v0 = (d) => (to180(d.TWA) > 0 ? +1 : -1) / m;
-        var v1 = (d) => 0;
-        var c1 = (d) =>
+        tackPlot = true;
+        c = 0;
+        m = 2;
+        xtick = (x) => "";
+        v0 = (d) => (to180(d.TWA) > 0 ? +1 : -1) / m;
+        v1 = (d) => 0;
+        c1 = (d) =>
           Math.abs(d.TWA) < 70
             ? blue
             : Math.abs(d.TWA) < 130
               ? "#06c4d1"
               : "#ded714";
       } else if (data.quantity == "TWD") {
-        var c = Math.round(data.TWDF);
-        var m = r > 0 ? r : maxrange(q, c);
-        var xtick = (x) => to360(x).toFixed(1).replace(".0", "");
-        var v0 = (d) => to180(d.TWD - c) / m;
-        var v1 = (d) => to180(d.TWDF - c) / m;
+        c = Math.round(data.TWDF);
+        m = r > 0 ? r : maxrange(q, c);
+        xtick = (x) => to360(x).toFixed(1).replace(".0", "");
+        v0 = (d) => to180(d.TWD - c) / m;
+        v1 = (d) => to180(d.TWDF - c) / m;
       } else if (data.quantity == "TWS") {
-        var c = r > 0 ? r / 2 : Math.round(knots(data.TWSF) * 10) / 10;
-        var m = c;
-        var v0 = (d) => (knots(d.TWS) - c) / m;
-        var v1 = (d) => (knots(d.TWSF) - c) / m;
-        var c0 = (d) => "gray";
+        c = r > 0 ? r / 2 : Math.round(knots(data.TWSF) * 10) / 10;
+        m = c;
+        v0 = (d) => (knots(d.TWS) - c) / m;
+        v1 = (d) => (knots(d.TWSF) - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "SET") {
-        var c = Math.round(data.SETF);
-        var m = r > 0 ? r : maxrange(q, c);
-        var xtick = (x) => to360(x).toFixed(1).replace(".0", "");
-        var v0 = (d) => to180(d.SET - c) / m;
-        var v1 = (d) => to180(d.SETF - c) / m;
-        var c0 = (d) => "gray";
+        c = Math.round(data.SETF);
+        m = r > 0 ? r : maxrange(q, c);
+        xtick = (x) => to360(x).toFixed(1).replace(".0", "");
+        v0 = (d) => to180(d.SET - c) / m;
+        v1 = (d) => to180(d.SETF - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "DFT") {
-        var c = r > 0 ? r / 2 : Math.round(knots(data.DFTF) * 10) / 10;
-        var m = c;
-        var v0 = (d) => (knots(d.DFT) - c) / m;
-        var v1 = (d) => (knots(d.DFTF) - c) / m;
-        var c0 = (d) => "gray";
+        c = r > 0 ? r / 2 : Math.round(knots(data.DFTF) * 10) / 10;
+        m = c;
+        v0 = (d) => (knots(d.DFT) - c) / m;
+        v1 = (d) => (knots(d.DFTF) - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "COG") {
-        var c = Math.round(data.COG);
-        var m = r > 0 ? r : maxrange(q, c);
-        var xtick = (x) => to360(x).toFixed(1).replace(".0", "");
-        var v0 = (d) => to180(d.COG - c) / m;
-        var c0 = (d) => blue;
+        c = Math.round(data.COG);
+        m = r > 0 ? r : maxrange(q, c);
+        xtick = (x) => to360(x).toFixed(1).replace(".0", "");
+        v0 = (d) => to180(d.COG - c) / m;
+        c0 = (d) => blue;
       } else if (data.quantity == "SOG") {
-        var c = Math.round(knots(data.SOG) * 10) / 10;
-        var m = c;
-        var v0 = (d) => (knots(d.SOG) - c) / m;
-        var c0 = (d) => "gray";
+        c = Math.round(knots(data.SOG) * 10) / 10;
+        m = c;
+        v0 = (d) => (knots(d.SOG) - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "VMG") {
-        var c = Math.round(knots(data.VMG) * 10) / 10;
-        var m = c;
-        var v0 = (d) => (knots(d.VMG) - c) / m;
-        var c0 = (d) => "gray";
+        c = Math.round(knots(data.VMG) * 10) / 10;
+        m = c;
+        v0 = (d) => (knots(d.VMG) - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "VMC") {
-        var c = Math.round(knots(data.VMC) * 10) / 10;
-        var m = c;
-        var v0 = (d) => (knots(d.VMC) - c) / m;
-        var c0 = (d) => "gray";
+        c = Math.round(knots(data.VMC) * 10) / 10;
+        m = c;
+        v0 = (d) => (knots(d.VMC) - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "HDT") {
-        var c = Math.round(data.HDT);
-        var m = r > 0 ? r : maxrange(q, c);
-        var xtick = (x) => to360(x).toFixed(1).replace(".0", "");
-        var v0 = (d) => to180(d.HDT - c) / m;
-        var c0 = (d) => blue;
+        c = Math.round(data.HDT);
+        m = r > 0 ? r : maxrange(q, c);
+        xtick = (x) => to360(x).toFixed(1).replace(".0", "");
+        v0 = (d) => to180(d.HDT - c) / m;
+        c0 = (d) => blue;
       } else if (data.quantity == "STW") {
-        var c = r > 0 ? r / 2 : Math.round(knots(data.STW) * 10) / 10;
-        var m = c;
-        var v0 = (d) => (knots(d.STW) - c) / m;
-        var c0 = (d) => "gray";
+        c = r > 0 ? r / 2 : Math.round(knots(data.STW) * 10) / 10;
+        m = c;
+        v0 = (d) => (knots(d.STW) - c) / m;
+        c0 = (d) => "gray";
       } else if (data.quantity == "HEL") {
-        var c = 0;
-        var m = r > 0 ? r : maxrange(q);
-        var v0 = (d) => d.HEL / m;
-        var c0 = (d) => blue;
+        c = 0;
+        m = r > 0 ? r : maxrange(q);
+        v0 = (d) => d.HEL / m;
+        c0 = (d) => blue;
       } else if (data.quantity == "DBS") {
-        var c = r > 0 ? r / 2 : Math.round(data.DBS * 10) / 10;
-        var m = c;
-        var v0 = (d) => (d.DBS - c) / m;
-        var c0 = (d) => blue;
+        c = r > 0 ? r / 2 : Math.round(data.DBS * 10) / 10;
+        m = c;
+        v0 = (d) => (d.DBS - c) / m;
+        c0 = (d) => blue;
       }
 
       //      console.log(q,data[q],r,c,m);
 
-      var f = w < 400 ? 0 : Math.min(w / 40, 30);
-      var o = 1.4 * f;
+      const f = w < 400 ? 0 : Math.min(w / 40, 30);
+      let o = 1.4 * f;
 
       let x0 = o,
         x1 = w - o,
@@ -606,7 +618,7 @@ export default async (api) => {
 
   /*################################################################################################*/
 
-  var SailInstrumentWidget = {
+  const SailInstrumentWidget = {
     name: "Sail_InstrumentWidget",
     caption: "",
     unit: "",
@@ -637,21 +649,21 @@ export default async (api) => {
     finalizeFunction: function () {},
     renderCanvas: function (canvas, data) {
       //console.log(data);
-      var ctx = canvas.getContext("2d");
+      const ctx = canvas.getContext("2d");
       ctx.save();
       // Set scale factor for all values
       canvas.style.height = "100%";
       canvas.style.width = "100%";
       canvas.style.aspectRatio = 1;
-      var bcr = canvas.getBoundingClientRect();
-      var w = bcr.width;
-      var h = bcr.height;
+      const bcr = canvas.getBoundingClientRect();
+      const w = bcr.width;
+      const h = bcr.height;
       canvas.width = w;
       canvas.height = h;
-      var size = 300;
-      var f1 = w / size;
-      var f2 = h / size;
-      var f = Math.min(f1, f2);
+      const size = 300;
+      const f1 = w / size;
+      const f2 = h / size;
+      const f = Math.min(f1, f2);
       ctx.scale(f, f);
       ctx.translate(w / 2 / f, h / 2 / f);
 
@@ -659,7 +671,7 @@ export default async (api) => {
 
       // draw triangle symbolizing the boat
       ctx.beginPath();
-      var radius = 100;
+      const radius = 100;
       ctx.moveTo(0, -0.75 * radius);
       ctx.lineTo(-0.3 * radius, 0.75 * radius);
       ctx.lineTo(+0.3 * radius, 0.75 * radius);
@@ -701,7 +713,7 @@ export default async (api) => {
 
   /*################################################################################################*/
 
-  var Sail_Instrument_OverlayParameter = {
+  const Sail_Instrument_OverlayParameter = {
     Widgetposition: {
       type: "SELECT",
       list: ["Boatposition", "Mapcenter"],
@@ -1056,7 +1068,7 @@ export default async (api) => {
     },
   };
 
-  var LayLines_OverlayParameter = {
+  const LayLines_OverlayParameter = {
     Opacity: {
       type: "NUMBER",
       default: 1,
@@ -1536,7 +1548,7 @@ export default async (api) => {
     return value.toFixed(n);
   }
 
-  var FuelGaugeWidget = {
+  const FuelGaugeWidget = {
     name: "0FuelGauge",
     caption: "Fuel",
     initFunction: function () {},
@@ -1666,7 +1678,7 @@ export default async (api) => {
     requestAnimationFrame(loop);
   }
 
-  var LinearCompassWidget = {
+  const LinearCompassWidget = {
     name: "0LinearCompass",
     storeKeys: {
       BRG: "nav.wp.course",
@@ -1803,7 +1815,7 @@ export default async (api) => {
     },
   });
 
-  var RoundCompassWidget = {
+  const RoundCompassWidget = {
     name: "0RoundCompass",
     storeKeys: {
       BRG: "nav.wp.course",
@@ -1921,7 +1933,7 @@ export default async (api) => {
     },
   });
 
-  var RoundCompass2Widget = {
+  const RoundCompass2Widget = {
     name: "0RoundCompass2",
     storeKeys: {
       BRG: "nav.wp.course",
@@ -2057,7 +2069,7 @@ export default async (api) => {
     },
   });
 
-  var SVGCompass = {
+  const SVGCompass = {
     name: "0SVGCompass",
     initFunction: function () {},
     finalizeFunction: function () {},
@@ -2360,7 +2372,7 @@ export default async (api) => {
     return formatFloatStr(value, opts.formatStr);
   }
 
-  var uniWidget = {
+  const uniWidget = {
     name: "0Widget",
     storeKeys: {
       TIME: "nav.gps.rtime",
