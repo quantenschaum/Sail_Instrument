@@ -28,10 +28,39 @@ import os
 import re
 import shutil
 import sys
-import time
+import traceback
+from datetime import datetime
 from math import atan2, copysign, cos, degrees, expm1, isfinite, radians, sin, sqrt
+from time import monotonic, sleep
+
+from matplotlib.pyplot import hist
+
+sys.path.insert(0, os.path.dirname(__file__))
+
+try:
+    from rich import print
+except:
+    pass
+
+DEV = os.getenv("DEV", "").lower() in {"1", "true", "on", "yes"}
+log = print if DEV else lambda *a: None
+
+
+def exception(e):
+    log(e, traceback.format_exc())
+    raise
+
 
 hasnumpy = False
+
+try:
+    import numpy
+    import scipy.interpolate
+    import scipy.optimize
+
+    hasnumpy = True
+except:
+    pass
 
 try:
     import numpy
@@ -100,8 +129,10 @@ DECODE = "nmea_decode"
 DEPTH_OF_TRANSDUCER = "depth_transducer"
 DRAUGHT = "draught"
 VMIN = "vmin"
+HIST_MAX_AGE = "hist_max_age"
 
 INPUT_FIELDS = {
+    "TME": "gps.time",
     "LAT": "gps.lat",
     "LON": "gps.lon",
     "COG": "gps.track",
@@ -152,44 +183,58 @@ CONFIG = [
     {
         "name": PERIOD,
         "description": "compute period (s)",
-        "type": "FLOAT",
-        "default": 0.5,
+        "type": "NUMBER",
+        "default": 1,
+        "rangeOrList": [1, 20],
     },
     {
         "name": SMOOTHING_AW,
         "description": "exponential smoothing time (s) for apparent wind",
         "default": "15",
         "type": "NUMBER",
+        "rangeOrList": [1, 600],
     },
     {
         "name": SMOOTHING_TW,
         "description": "exponential smoothing time (s) for true wind",
         "default": "300",
         "type": "NUMBER",
+        "rangeOrList": [1, 600],
     },
     {
         "name": SMOOTHING_SD,
         "description": "exponential smoothing time (s) for set/drift",
         "default": "600",
         "type": "NUMBER",
+        "rangeOrList": [1, 600],
     },
     {
         "name": SMOOTHING_COG,
         "description": "exponential smoothing time (s) for COG/SOG",
         "default": "10",
         "type": "NUMBER",
+        "rangeOrList": [1, 600],
     },
     {
         "name": SMOOTHING_CTW,
         "description": "exponential smoothing time (s) for CTW/STW",
         "default": "10",
         "type": "NUMBER",
+        "rangeOrList": [1, 600],
     },
     {
         "name": SMOOTHING_HDT,
         "description": "exponential smoothing time (s) for HDT/STW",
         "default": "5",
         "type": "NUMBER",
+        "rangeOrList": [1, 600],
+    },
+    {
+        "name": HIST_MAX_AGE,
+        "description": "how much historic values to keep, max age (s)",
+        "default": "3600",
+        "type": "NUMBER",
+        "rangeOrList": [0, 3600],
     },
     {
         "name": FALLBACK,
@@ -231,13 +276,15 @@ CONFIG = [
         "name": TACK_ANGLE,
         "description": "tack angle, if >0 use this fixed angle instead of calculating from polar data",
         "default": "0",
-        "type": "FLOAT",
+        "type": "NUMBER",
+        "rangeOrList": [0, 180],
     },
     {
         "name": GYBE_ANGLE,
         "description": "gybe angle, if >0 use this fixed angle instead of calculating from polar data",
         "default": "0",
-        "type": "FLOAT",
+        "type": "NUMBER",
+        "rangeOrList": [0, 180],
     },
     {
         "name": GROUND_WIND,
@@ -250,12 +297,14 @@ CONFIG = [
         "description": "leeway factor LEF, if >0 leeway angle is estimated as LEF * HEL / STW^2",
         "default": "10",
         "type": "FLOAT",
+        "rangeOrList": [0, 100],
     },
     {
         "name": POLAR_FACTOR,
         "description": "polar speed correction factor",
         "default": "1",
         "type": "FLOAT",
+        "rangeOrList": [0, 10],
     },
     {
         "name": POLAR_FILE,
@@ -273,18 +322,21 @@ CONFIG = [
         "description": "period (s) to recompute magnetic variation",
         "type": "NUMBER",
         "default": 600,
+        "rangeOrList": [0, 3600],
     },
     {
         "name": DEPTH_OF_TRANSDUCER,
         "description": "depth of transducer (m) (negative=disabled)",
         "type": "FLOAT",
         "default": -1,
+        "rangeOrList": [-1, 10],
     },
     {
         "name": DRAUGHT,
         "description": "draught (m) (negative=disabled)",
         "type": "FLOAT",
         "default": -1,
+        "rangeOrList": [-1, 10],
     },
     {
         "name": WRITE,
@@ -302,6 +354,7 @@ CONFIG = [
         "description": "NMEA source priority",
         "type": "NUMBER",
         "default": 10,
+        "rangeOrList": [0, 100],
     },
     {
         "name": TALKER_ID,
@@ -320,8 +373,44 @@ CONFIG = [
         "description": "minimal speed (knots) needed to show tide vector or COG marker",
         "type": "FLOAT",
         "default": 0.2,
+        "rangeOrList": [0, 10],
     },
 ]
+
+
+def slist(l):
+    return ",".join(map(str, sorted(l)))
+
+
+class NMEAfilter:
+    def __init__(self, filterstr):
+        self.tests = []
+        for f in filterstr.strip().split(","):
+            f = f.strip().replace("$", "").replace("!", "")
+            if f:
+                self.tests.append(f.upper())
+        # print(self.tests)
+
+    def __call__(self, sentence):
+        if len(sentence) < 6:
+            return
+        s = sentence[1:6].upper()
+        # print(s)
+        for t in self.tests:
+            result = "^" not in t
+            p = t.replace("^", "")
+            # print(t, p, result)
+            # print(len(p), s[1:3], s[3:6], s[1:6])
+            if len(p) == 2 and s[0:2] == p:
+                return result
+            if len(p) == 3 and s[2:5] == p:
+                return result
+            if len(p) == 5 and s[0:5] == p:
+                return result
+        return all("^" in t for t in self.tests)
+
+    def filter(self, sentences):
+        return list(filter(self, sentences))
 
 
 class Plugin(object):
@@ -353,14 +442,43 @@ class Plugin(object):
         assert MIN_AVNAV_VERSION <= self.api.getAvNavVersion(), (
             "incompatible AvNav version"
         )
-
         self.api.registerEditableParameters(CONFIG, self.changeParam)
-        self.api.registerRestart(self.stop)
-
+        # self.api.registerRestart(self.stop)
+        self.api.registerRequestHandler(self.handleApiRequest)
+        self.history = []
         self.saveAllConfig()
+        log(self.api.getBaseUrl())
 
-    def stop(self):
-        pass
+    # def stop(self):
+    # pass
+
+    def handleApiRequest(self, url, handler, args):
+        log(url, args)
+        if url == "history":
+            tmin = int(args.get("tmin", [0])[0])
+            history = self.history
+            if tmin:
+                history = [e for e in history if e["TME"] > tmin]
+            return {"data": history}
+
+    def add2history(self, data, interval=1):
+        maxage = self.config[HIST_MAX_AGE]
+        if not maxage:
+            return
+        if "TME" not in data:
+            return
+        now = data.TME
+        if self.history and now - self.history[-1]["TME"] < interval:
+            return
+        data = {
+            k: float(f"{v:.7g}") if v < 1e6 else float(v)
+            for k, v in data
+            if isinstance(v, (int, float))
+        }
+        self.history.append(data)
+        tmin = now - maxage
+        while self.history and self.history[0]["TME"] < tmin:
+            self.history.pop(0)
 
     def getConfigValue(self, name):
         defaults = self.pluginInfo()["config"]
@@ -393,7 +511,7 @@ class Plugin(object):
             value = self.getConfigValue(name)
             value = TYPES.get(c.get("type"), str)(value)
             config[name] = value
-        # print("config", config)
+        # log("config", config)
         assert config[PERIOD] > 0
         assert config[PRIORITY] > 0
         assert len(config[TALKER_ID]) == 2
@@ -409,7 +527,7 @@ class Plugin(object):
     def readValue(self, path):
         "prevents reading values that we self have calculated"
         a = self.api.getSingleValue(path, includeInfo=True)
-        # if a: print(path, a.value, a.source, a.priority / 10)
+        # if a: log(path, a.value, a.source, a.priority / 10)
         if a is not None and SOURCE not in a.source:
             return a.value
 
@@ -435,14 +553,14 @@ class Plugin(object):
                 self.variation_model = geomag.GeoMag(filename)
             except Exception as x:
                 # self.api.log(f"WMM error {x}")
-                self.msg += f" WMM error {x}"
+                self.msgs.append(f"WMM error {x}")
                 return
         if (
             self.variation is None
-            or time.monotonic() - self.variation_time > self.config[WMM_PERIOD]
+            or monotonic() - self.variation_time > self.config[WMM_PERIOD]
         ):
             self.variation = self.variation_model.GeoMag(lat, lon).dec
-            self.variation_time = time.monotonic()
+            self.variation_time = monotonic()
         return self.variation
 
     def manual_wind(self):
@@ -504,144 +622,147 @@ class Plugin(object):
             data["TWDS"] = sqrt(v)
 
     def run(self):
-        self.read_config()
-        self.api.setStatus("STARTED", "running")
-        d = CourseData()
+        sleep(1)
         while not self.api.shouldStopMainThread():
             try:
-                self.msg = ""
-                data = {k: self.readValue(p) for k, p in INPUT_FIELDS.items()}
-                data["HEL"] = (
-                    data["HEL"]
-                    or data["HEL1"]
-                    or (degrees(data["HEL2"]) if data.get("HEL2") is not None else None)
-                )
-                present = {k for k in data.keys() if data[k] is not None}
-
-                data["LEF"] = self.config[LEEWAY_FACTOR] / KNOTS**2
-
-                if data["VAR"] is None and all(
-                    data.get(k) is not None for k in ("LAT", "LON")
-                ):
-                    data["VAR"] = self.mag_variation(data["LAT"], data["LON"])
-                    self.msg += ", variation from WMM"
-
-                if self.config[FALLBACK]:
-                    if data["HDT"] is None and any(
-                        data.get(k) is None for k in ("HDM", "VAR")
-                    ):
-                        data["HDT"] = data["COG"]
-                        self.msg += ", fallback HDT=COG"
-                    if data["STW"] is None:
-                        data["STW"] = data["SOG"]
-                        self.msg += ", fallback STW=SOG"
-
-                if data["DEV"] is None:
-                    data["DEV"] = 0
-
-                if all(
-                    data.get(k) is None for k in ("AWA", "AWS", "TWA", "TWS", "TWD")
-                ):
-                    data["GWD"], data["GWS"] = self.manual_wind() or (None, None)
-                    if all(data.get(k) is not None for k in ("GWD", "GWS")):
-                        if (
-                            data["COG"] is None
-                            and (data["SOG"] or 0) < self.config[VMIN]
-                        ):
-                            data["COG"], data["SOG"] = (
-                                0,
-                                0,
-                            )  # allow to compute TW w/o COG if not moving
-                        self.msg += ", manually entered wind"
-
-                if data["HEL"] is not None:
-                    self.msg += ", leeway estimation"
-
-                dot = self.config[DEPTH_OF_TRANSDUCER]
-                draught = self.config[DRAUGHT]
-                data["DOT"] = dot if dot >= 0 else None
-                data["DRT"] = draught if draught >= 0 else None
-                data["BRG"] = bearing_to_waypoint()
-
-                data = {
-                    k: (to180(v) if k.endswith("A") and v else v)
-                    for k, v in data.items()
-                    if len(k) == 3
-                }
-
-                data = d = CourseData(**data)  # compute missing values
-
-                self.smooth(data, "AWD", "AWS")
-                data["AWAF"] = (
-                    to360(data["AWDF"] - data["HDT"]) if d.has("AWDF", "HDT") else None
-                )
-                self.smooth(data, "TWD", "TWS")
-                data["TWAF"] = (
-                    to180(data["TWDF"] - data["HDT"]) if d.has("TWDF", "HDT") else None
-                )
-                self.smooth(data, "SET", "DFT")
-                self.smooth(data, "COG", "SOG")
-                self.smooth(data, "HDT", "STW")
-                self.smooth(data, "CTW", "STW")
-                for k in ("AWS", "TWS", "DFT"):
-                    if k not in data:
-                        data[k + "F"] = 0
-                        self.msg += ", no " + k
-
-                self.laylines(data)
-
-                calculated = {k for k in data.keys() if data[k] is not None}
-                calculated -= present
-
-                data.VMIN = self.config[VMIN]
-                # for k in ("COG","SOG","HDT","STW"):
-                #     if data.misses(k): data[k] = -1 # explicitly mark as undefined, workaround for https://github.com/wellenvogel/avnav/issues/347
-
-                for k in data.keys():
-                    # print(f"{k:4} {data[k]:8.3f}")
-                    self.writeValue(data, k, PATH_PREFIX + k)
-
-                sending = set()
-                nmea_write = self.config[WRITE]
-                nmea_filter = self.config[NMEA_FILTER].split(",")
-                nmea_priority = self.config[PRIORITY]
-                ID = self.config[TALKER_ID]
-                if nmea_write:
-                    for f, s in NMEA_SENTENCES.items():
-                        if any(k in calculated for k in f.split(",")) and data.has(
-                            *f.split(",")
-                        ):
-                            s = eval(f'f"{s}"')
-                            if not nmea_filter or NMEAParser.checkFilter(
-                                s, nmea_filter
-                            ):
-                                # print(">", s)
-                                self.api.addNMEA(
-                                    s,
-                                    source=SOURCE,
-                                    addCheckSum=True,
-                                    omitDecode=not self.config[DECODE],
-                                    sourcePriority=nmea_priority,
-                                )
-                                sending.add(s[:6])
-                        elif not data.has(*f.split(",")):
-                            self.api.debug(
-                                " Cannot send NMEA_SENTENCE $%s[%s] because missing: %s",
-                                s[5:8],
-                                f,
-                                {j for j in f.split(",") if data[j] is None},
-                            )
-
-                self.api.setStatus(
-                    "NMEA",
-                    f"present:{sorted(present)} --> calculated:{sorted(calculated)} sending:{sorted(sending)}{self.msg}",
-                )
+                self.loop()
             except Exception as x:
                 self.api.error(f"{x}")
-                self.api.setStatus("ERROR", f"{x}")
+                self.api.setStatus("ERROR", f"{x} ")
+                exception(x)
+                sleep(5)
 
-            time.sleep(self.config[PERIOD])
-        self.api.log("terminated run-loop")
+    def loop(self):
+        self.read_config()
+        self.api.setStatus("STARTED", "starting")
+        d = CourseData()
+        nmea_filter = NMEAfilter(self.config[NMEA_FILTER])
+        while not self.api.shouldStopMainThread():
+            self.msgs = []
+            data = {k: self.readValue(p) for k, p in INPUT_FIELDS.items()}
+            data["HEL"] = (
+                data["HEL"]
+                or data["HEL1"]
+                or (degrees(data["HEL2"]) if data.get("HEL2") is not None else None)
+            )
+            if data["TME"]:
+                data["TME"] = datetime.fromisoformat(data["TME"]).timestamp()
+            present = {k for k in data.keys() if data[k] is not None}
+
+            data["LEF"] = self.config[LEEWAY_FACTOR] / KNOTS**2
+
+            if data["VAR"] is None and all(
+                data.get(k) is not None for k in ("LAT", "LON")
+            ):
+                data["VAR"] = self.mag_variation(data["LAT"], data["LON"])
+                self.msgs.append("variation from WMM")
+
+            if self.config[FALLBACK]:
+                if data["HDT"] is None and any(
+                    data.get(k) is None for k in ("HDM", "VAR")
+                ):
+                    data["HDT"] = data["COG"]
+                    self.msgs.append("fallback HDT=COG")
+                if data["STW"] is None:
+                    data["STW"] = data["SOG"]
+                    self.msgs.append("fallback STW=SOG")
+
+            if data["DEV"] is None:
+                data["DEV"] = 0
+
+            if all(data.get(k) is None for k in ("AWA", "AWS", "TWA", "TWS", "TWD")):
+                data["GWD"], data["GWS"] = self.manual_wind() or (None, None)
+                if all(data.get(k) is not None for k in ("GWD", "GWS")):
+                    if data["COG"] is None and (data["SOG"] or 0) < self.config[VMIN]:
+                        data["COG"], data["SOG"] = (
+                            0,
+                            0,
+                        )  # allow to compute TW w/o COG if not moving
+                    self.msgs.append("manually entered wind")
+
+            if data["HEL"] is not None:
+                self.msgs.append("leeway estimation")
+
+            dot = self.config[DEPTH_OF_TRANSDUCER]
+            draught = self.config[DRAUGHT]
+            data["DOT"] = dot if dot >= 0 else None
+            data["DRT"] = draught if draught >= 0 else None
+            data["BRG"] = bearing_to_waypoint()
+
+            data = {
+                k: (to180(v) if k.endswith("A") and v else v)
+                for k, v in data.items()
+                if len(k) == 3
+            }
+
+            data = CourseData(**data)  # compute missing values
+
+            self.smooth(data, "AWD", "AWS")
+            data["AWAF"] = (
+                to360(data["AWDF"] - data["HDT"]) if data.has("AWDF", "HDT") else None
+            )
+            self.smooth(data, "TWD", "TWS")
+            data["TWAF"] = (
+                to180(data["TWDF"] - data["HDT"]) if data.has("TWDF", "HDT") else None
+            )
+            self.smooth(data, "SET", "DFT")
+            self.smooth(data, "COG", "SOG")
+            self.smooth(data, "HDT", "STW")
+            self.smooth(data, "CTW", "STW")
+            for k in ("AWS", "TWS", "DFT"):
+                if k not in data:
+                    data[k + "F"] = 0
+                    self.msgs.append("no " + k)
+
+            self.laylines(data)
+
+            calculated = {k for k in data.keys() if data[k] is not None}
+            calculated -= present
+
+            data.VMIN = self.config[VMIN]
+            # for k in ("COG","SOG","HDT","STW"):
+            #     if data.misses(k): data[k] = -1 # explicitly mark as undefined, workaround for https://github.com/wellenvogel/avnav/issues/347
+
+            self.add2history(data)
+
+            for k in data.keys():
+                # log(f"{k:4} {data[k]:8.3f}")
+                self.writeValue(data, k, PATH_PREFIX + k)
+
+            sending = set()
+            nmea_write = self.config[WRITE]
+            nmea_priority = self.config[PRIORITY]
+            ID = self.config[TALKER_ID]
+            if nmea_write:
+                for f, s in NMEA_SENTENCES.items():
+                    if any(k in calculated for k in f.split(",")) and data.has(
+                        *f.split(",")
+                    ):
+                        s = eval(f'f"{s}"')
+                        if nmea_filter(s):
+                            # log(">", s)
+                            self.api.addNMEA(
+                                s,
+                                source=SOURCE,
+                                addCheckSum=True,
+                                omitDecode=not self.config[DECODE],
+                                sourcePriority=nmea_priority,
+                            )
+                            sending.add(s[3:6])
+                    elif not data.has(*f.split(",")):
+                        self.api.debug(
+                            " Cannot send NMEA_SENTENCE $%s[%s] because missing: %s",
+                            s[5:8],
+                            f,
+                            {j for j in f.split(",") if data[j] is None},
+                        )
+
+            self.api.setStatus(
+                "NMEA",
+                f"input:{slist(present)} output:{slist(calculated)} NMEA:{slist(sending)} history:{len(self.history)} {', '.join(self.msgs)}",
+            )
+
+            sleep(self.config[PERIOD])
 
     def laylines(self, data):
         try:
@@ -673,7 +794,7 @@ class Plugin(object):
                     to360(twd + data.LAY),
                 )  # absolute layline directions
                 fixed_laylines = True
-                self.msg += ", fixed laylines"
+                self.msgs.append("fixed laylines")
                 # return
             else:
                 if not self.polar:
@@ -683,10 +804,10 @@ class Plugin(object):
                     data.LAY = abs(
                         to180(self.polar.vmc_angle(0, tws, 0 if upwind else 180))
                     )
-                    self.msg += ", laylines from polar"
+                    self.msgs.append("laylines from polar")
                 else:
                     data.LAY = self.polar.angle(tws, upwind)
-                    self.msg += ", laylines from table"
+                    self.msgs.append("laylines from table")
 
             leeway = list(map(float, self.config[LAYLINES_LEEWAY].split(",")))[
                 0 if upwind else 1
@@ -705,19 +826,19 @@ class Plugin(object):
                 data.LLP, data.LLPV = add_polar(
                     (data.SETF, data.DFTF), (data.LLP, data.LLPV)
                 )  # port layline incl. current
-                self.msg += ", laylines over ground"
+                self.msgs.append("laylines over ground")
 
             if fixed_laylines:
                 return
 
             if not hasnumpy:
-                self.msg += ", numpy/scipy not available"
+                self.msgs.append("numpy/scipy not available")
                 return
 
             data.VPOL = self.config[POLAR_FACTOR] * self.polar.value(twa, tws)
             if data.has("VPOL", "STW"):
                 data.VPP = 100 * data.STW / data.VPOL
-            self.msg += ", calculate VPOL"
+            self.msgs.append("calculate VPOL")
 
             if self.config[SHOW_POLAR]:
                 values = numpy.array(
@@ -725,17 +846,17 @@ class Plugin(object):
                 )
                 values /= max(1, values.max())
                 data.POLAR = ",".join([f"{v:.2f}" for v in values])
-                self.msg += ", show polar"
+                self.msgs.append("show polar")
 
             if brg and self.config[CALC_VMC]:
                 data.VMCA = self.polar.vmc_angle(twd, tws, brg)
                 if upwind and abs(to180(brg - twd)) < data.LAY:
                     data.VMCB = self.polar.vmc_angle(twd, tws, brg, -1)
-                self.msg += ", VMC angles"
+                self.msgs.append("VMC angles")
 
         except Exception as x:
-            self.api.error(f"laylines {x}")
-            self.msg += f", laylines error {x}"
+            self.api.error(f"laylines error: {x}")
+            self.msgs.append(f"laylines error: {x}")
 
 
 def bearing_to_waypoint():
@@ -748,7 +869,7 @@ def bearing_to_waypoint():
             return
         return wpData.dstBearing
     except Exception as x:
-        # print(x)
+        # log(x)
         return
 
 
@@ -785,7 +906,7 @@ class Polar:
                 self.data["TWA"], self.data["TWS"], self.data[val], **kw
             )
 
-        return float(self.spl(abs(to180(twa)), tws * KNOTS)) * MPS
+        return float(self.spl(abs(to180(twa)), tws * KNOTS).item()) * MPS
 
     def vmc_angle(self, twd, tws, brg, s=1):
         """
@@ -1012,6 +1133,10 @@ class CourseData:
 
     def __str__(self):
         return "\n".join(f"{k}={self[k]}" for k in self.keys())
+
+    def __iter__(self):
+        for key in self.keys():
+            yield key, self[key]
 
     def keys(self):
         return sorted(filter(self.__contains__, self._data.keys()))

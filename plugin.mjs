@@ -12,6 +12,7 @@ export default async (api) => {
   log("start", api, api.getAvNavVersion());
 
   const LatLon = api.LatLon();
+  const base = api.getBaseUrl();
 
   const FONT = "roboto,droid sans,open sans,noto sans,arial,sans-serif";
 
@@ -240,7 +241,35 @@ export default async (api) => {
     ctxRef.restore();
   }
 
-  const history = [];
+  let history = [];
+
+  async function add2history(data) {
+    // log(time, new Date(time * 1000), data);
+    const time = data.TME;
+    if (time == null) return;
+    let hist = [...history]; // local copy, async!
+    let t0 = hist.at(-1)?.TME ?? 0; // newest data point
+
+    if (t0 < time - 15) {
+      // if too old, fetch from server
+      const maxage = Math.min(time - t0, data.history);
+      log("fetch history", maxage);
+      const url = `${base}api/history?maxage=${maxage}`;
+      const r = await fetch(url).then((r) => r.json());
+      hist.push(...r.data.filter((e) => e.TME > t0));
+      t0 = hist.at(-1)?.TME ?? 0;
+    }
+
+    if (t0 < time) hist.push({ ...data }); // append current
+
+    const tmin = time - 3600; // remove old
+    while (hist.length > 0 && hist[0].TME < tmin) {
+      hist.shift();
+    }
+
+    history = hist;
+    log("history", history.length);
+  }
 
   const HistoryPlotWidget = {
     name: "WindPlot",
@@ -276,6 +305,7 @@ export default async (api) => {
       DBK: "nav.gps.sail_instrument.DBK",
       VMG: "nav.gps.sail_instrument.VMG",
       VMC: "nav.gps.sail_instrument.VMC",
+      TME: "nav.gps.sail_instrument.TME",
     },
     translateFunction: (props) => {
       //        console.log(props);
@@ -303,18 +333,12 @@ export default async (api) => {
         unit: units[props.quantity],
       };
     },
-    initFunction: function () {
-      log("init");
-      history.length = 0;
-    },
-    finalizeFunction: function () {
-      log("finalize");
-      history.length = 0;
-    },
+    // initFunction: function () {      log("init");    },
+    // finalizeFunction: function () {      log("finalize");    },
     renderCanvas: function (canvas, data) {
-      // console.log(data);
-      if (typeof data.TIME == "undefined") return;
-      let time = data.TIME.valueOf();
+      // log(data);
+      if (data.TIME == null) return;
+      const time = data.TIME.valueOf() / 1000;
       let tmax = data.history;
       let n = 5;
 
@@ -339,29 +363,15 @@ export default async (api) => {
       //      console.log(data.quantity,v);
       if (!valid) return;
 
-      let hist = window.windplothist;
-      if (typeof hist == "undefined") {
-        window.windplothist = hist = new Map();
-      }
-      hist.set(time, data);
-      for (const k of hist.keys()) {
-        let t = Math.max(0, time - k) / 1000;
-        if (t > 3600) {
-          hist.delete(k);
-        }
-      }
+      add2history(data);
 
       function maxrange(name, c) {
         let min = data[name];
         let max = min;
-        if (typeof c != "undefined") {
-          min = max = 0;
-        }
-        for (let [k, d] of hist) {
+        if (c != null) min = max = 0;
+        for (const d of history) {
           let v = d[name];
-          if (typeof c != "undefined") {
-            v = to180(v - c);
-          }
+          if (c != null) v = to180(v - c);
           if (v) {
             min = Math.min(min, v);
             max = Math.max(max, v);
@@ -533,14 +543,14 @@ export default async (api) => {
         let p = [Number.NaN, 0];
         let c = "";
         ctx.beginPath();
-        for (const k of hist.keys()) {
-          let t = Math.max(0, time - k) / 1000;
+        for (const d of history) {
+          let t = Math.max(0, time - d.TME);
           if (t > tmax) {
             continue;
           }
-          let x = xc + (val(hist.get(k)) * dx) / 2;
+          let x = xc + (val(d) * dx) / 2;
           let y = y0 + (t * dy) / tmax;
-          let s = col(hist.get(k));
+          let s = col(d);
           if (c != s) {
             if (split && c != "x") {
               c = "x";
@@ -605,14 +615,19 @@ export default async (api) => {
     history: {
       type: "NUMBER",
       default: 600,
+      description: "time range (s)",
+      list: [0, 3600],
     },
     range: {
       type: "NUMBER",
       default: 0,
+      description: "values range, ust this range if >0",
+      list: [0, 1000],
     },
     aspect: {
       type: "FLOAT",
       default: 1,
+      description: "aspect ratio for chart page",
     },
   });
 
